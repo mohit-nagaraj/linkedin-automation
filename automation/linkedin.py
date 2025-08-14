@@ -21,23 +21,36 @@ class Profile:
 
 
 class LinkedInAutomation:
-    def __init__(self, email: str, password: str, headless: bool = True, slow_mo_ms: int = 0, navigation_timeout_ms: int = 30000, storage_state_path: str | None = None):
+    def __init__(self, email: str, password: str, headless: bool = False, slow_mo_ms: int = 0, navigation_timeout_ms: int = 30000, storage_state_path: str | None = None, use_persistent_context: bool = True, user_data_dir: str | None = None, browser_channel: str | None = None):
         self.email = email
         self.password = password
         self.headless = headless
         self.slow_mo_ms = slow_mo_ms
         self.navigation_timeout_ms = navigation_timeout_ms
         self.storage_state_path = storage_state_path
+        self.use_persistent_context = use_persistent_context
+        self.user_data_dir = user_data_dir
+        self.browser_channel = browser_channel
         self.browser: Optional[Browser] = None
         self.page: Optional[Page] = None
 
     async def __aenter__(self) -> "LinkedInAutomation":
         self.playwright = await async_playwright().start()
-        self.browser = await self.playwright.chromium.launch(headless=self.headless, slow_mo=self.slow_mo_ms)
-        storage = None
-        if self.storage_state_path and os.path.exists(self.storage_state_path):
-            storage = self.storage_state_path
-        context = await self.browser.new_context(storage_state=storage)
+        launch_args = dict(channel=self.browser_channel) if self.browser_channel else {}
+        if self.use_persistent_context and self.user_data_dir:
+            context = await self.playwright.chromium.launch_persistent_context(
+                user_data_dir=self.user_data_dir,
+                headless=self.headless,
+                slow_mo=self.slow_mo_ms,
+                **launch_args,
+            )
+            self.browser = context.browser
+        else:
+            self.browser = await self.playwright.chromium.launch(headless=self.headless, slow_mo=self.slow_mo_ms, **launch_args)
+            storage = None
+            if self.storage_state_path and os.path.exists(self.storage_state_path):
+                storage = self.storage_state_path
+            context = await self.browser.new_context(storage_state=storage)
         self.page = await context.new_page()
         self.page.set_default_timeout(self.navigation_timeout_ms)
         return self
@@ -49,16 +62,19 @@ class LinkedInAutomation:
 
     async def login(self) -> None:
         assert self.page is not None
-        await self.page.goto("https://www.linkedin.com/feed/")
-        # If already logged in (via storage), feed should load; otherwise navigate to login
+        await self.page.goto("https://www.linkedin.com/feed/", wait_until="domcontentloaded")
         if "login" in self.page.url:
-            await self.page.goto("https://www.linkedin.com/login")
+            await self.page.goto("https://www.linkedin.com/login", wait_until="domcontentloaded")
             await self.page.fill("input#username", self.email)
             await self.page.fill("input#password", self.password)
             await self.page.click("button[type=submit]")
-            await self.page.wait_for_url("**/feed**")
-            # Persist storage state after login
-            if self.storage_state_path:
+            # Wait for either feed to load or a visible error/2FA prompt
+            try:
+                await self.page.wait_for_url("**/feed**", timeout=self.navigation_timeout_ms)
+            except Exception:
+                # As a fallback, wait for main nav to appear
+                await self.page.wait_for_selector("nav.global-nav", timeout=self.navigation_timeout_ms)
+            if self.storage_state_path and (not self.use_persistent_context):
                 os.makedirs(os.path.dirname(self.storage_state_path), exist_ok=True)
                 await self.page.context.storage_state(path=self.storage_state_path)
 

@@ -29,9 +29,12 @@ class Settings:
     oauth_token_path: str = "token.json"
 
     # Runtime
-    headless: bool = True
+    headless: bool = False
     slow_mo_ms: int = 0
     navigation_timeout_ms: int = 30000
+    use_persistent_context: bool = True
+    user_data_dir: str = ".playwright/user-data"
+    browser_channel: str = "chrome"
 
 
 def get_env_list(name: str) -> List[str]:
@@ -65,9 +68,12 @@ def load_settings() -> Settings:
         storage_state_path=os.getenv("STORAGE_STATE_PATH", ".playwright/storage_state.json"),
         oauth_client_secrets_path=os.getenv("OAUTH_CLIENT_SECRETS_PATH"),
         oauth_token_path=os.getenv("OAUTH_TOKEN_PATH", "token.json"),
-        headless=os.getenv("HEADLESS", "true").lower() in {"1", "true", "yes"},
+        headless=os.getenv("HEADLESS", "false").lower() in {"1", "true", "yes"},
         slow_mo_ms=int(os.getenv("SLOW_MO_MS", "0")),
         navigation_timeout_ms=int(os.getenv("NAVIGATION_TIMEOUT_MS", "30000")),
+        use_persistent_context=os.getenv("USE_PERSISTENT_CONTEXT", "true").lower() in {"1", "true", "yes"},
+        user_data_dir=os.getenv("USER_DATA_DIR", ".playwright/user-data"),
+        browser_channel=os.getenv("BROWSER_CHANNEL", "chrome"),
     )
 
 

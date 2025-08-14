@@ -50,6 +50,9 @@ async def run() -> None:
         slow_mo_ms=settings.slow_mo_ms,
         navigation_timeout_ms=settings.navigation_timeout_ms,
         storage_state_path=settings.storage_state_path,
+        use_persistent_context=settings.use_persistent_context,
+        user_data_dir=settings.user_data_dir,
+        browser_channel=settings.browser_channel,
     ) as li:
         await li.login()
         profile_urls = await li.search_people(settings.search_keywords, settings.locations, max_results=settings.max_profiles)
