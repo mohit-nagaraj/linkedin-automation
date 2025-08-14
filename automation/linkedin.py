@@ -41,6 +41,8 @@ class LinkedInAutomation:
         self.page: Optional[Page] = None
 
     async def __aenter__(self) -> "LinkedInAutomation":
+        if self.debug:
+            logging.info("Starting Playwright and launching browser (headless=%s, channel=%s)", self.headless, self.browser_channel)
         self.playwright = await async_playwright().start()
         launch_args = dict(channel=self.browser_channel) if self.browser_channel else {}
         if self.use_persistent_context and self.user_data_dir:
@@ -80,12 +82,17 @@ class LinkedInAutomation:
             await self.page.fill("input#username", self.email)
             await self.page.fill("input#password", self.password)
             await self.page.click("button[type=submit]")
-            # Wait for either feed to load or a visible error/2FA prompt
+            # Wait for stable state without hard-coding a selector that may change
             try:
-                await self.page.wait_for_url("**/feed**", timeout=self.navigation_timeout_ms)
+                await self.page.wait_for_load_state("networkidle", timeout=self.navigation_timeout_ms)
             except Exception:
-                # As a fallback, wait for main nav to appear
-                await self.page.wait_for_selector("nav.global-nav", timeout=self.navigation_timeout_ms)
+                pass
+            # If still not on feed, allow a brief 2FA/checkpoint window, then proceed
+            try:
+                await self.page.wait_for_url("**/feed**", timeout=15000)
+            except Exception:
+                if self.debug:
+                    logging.info("Not redirected to feed; continuing (possibly 2FA/captcha). Current URL: %s", self.page.url)
             if self.storage_state_path and (not self.use_persistent_context):
                 os.makedirs(os.path.dirname(self.storage_state_path), exist_ok=True)
                 await self.page.context.storage_state(path=self.storage_state_path)
@@ -96,14 +103,16 @@ class LinkedInAutomation:
         assert self.page is not None
         query = "%20".join([k.replace(" ", "%20") for k in keywords])
         if self.debug:
-            logging.info("Searching people: %s", ", ".join(keywords))
+            logging.info("Searching people with keywords: %s", ", ".join(keywords))
         await self.page.goto(f"https://www.linkedin.com/search/results/people/?keywords={query}")
 
         # Optionally filter by locations if available
         # For simplicity, rely on keyword search; location filtering can be added via UI interaction.
 
         profile_urls: List[str] = []
+        page_round = 0
         while len(profile_urls) < max_results:
+            page_round += 1
             cards = await self.page.locator("a.app-aware-link:has(img)" ).all()
             for card in cards:
                 href = await card.get_attribute("href")
@@ -115,7 +124,11 @@ class LinkedInAutomation:
                         break
             # Scroll to load more
             await self.page.evaluate("window.scrollBy(0, document.body.scrollHeight)")
+            if self.debug:
+                logging.debug("Search page round %d: collected %d profiles so far", page_round, len(profile_urls))
             await self._human_pause()
+        if self.debug:
+            logging.info("Collected %d profile URLs", len(profile_urls[:max_results]))
         return profile_urls[:max_results]
 
     async def scrape_profile(self, profile_url: str) -> Profile:

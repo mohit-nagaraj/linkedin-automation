@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Optional, Any
 import asyncio
 import importlib
+import logging
 
 from .linkedin import Profile
 
@@ -36,6 +37,7 @@ class GeminiClient:
             contents=prompt,
         )
         text = response.text if hasattr(response, "text") else str(response)
+        logging.debug("Summarized profile '%s'", profile.name)
         return text.strip()
 
     async def craft_connect_note(self, profile: Profile, owner_bio: str) -> str:
@@ -57,6 +59,7 @@ class GeminiClient:
             contents=prompt,
         )
         text = response.text if hasattr(response, "text") else str(response)
+        logging.debug("Crafted note for '%s'", profile.name)
         return text.strip().replace("\n", " ")[:280]
 
 

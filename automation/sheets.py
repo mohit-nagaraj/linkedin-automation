@@ -4,6 +4,7 @@ import json
 from typing import Optional, List, Dict, Any
 
 import gspread
+import logging
 from google.oauth2.service_account import Credentials
 from google.oauth2.credentials import Credentials as UserCredentials
 from google_auth_oauthlib.flow import InstalledAppFlow
@@ -67,6 +68,7 @@ class SheetsClient:
                 self.spreadsheet = client.open(spreadsheet_name)
             except gspread.exceptions.SpreadsheetNotFound:
                 # Create a new spreadsheet with the provided name
+                logging.info("Spreadsheet '%s' not found. Creating new spreadsheet.", spreadsheet_name)
                 self.spreadsheet = client.create(spreadsheet_name)
         try:
             self.worksheet = self.spreadsheet.worksheet(worksheet_name)
@@ -84,6 +86,7 @@ class SheetsClient:
             ])
 
     def append_lead(self, row: List[Any]) -> None:
+        logging.debug("Appending lead to sheet: %s", row[:4])
         self.worksheet.append_row(row, value_input_option="RAW")
 
 
