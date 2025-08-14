@@ -8,13 +8,13 @@ from .linkedin import Profile
 
 
 class GeminiClient:
-    def __init__(self, api_key: str, model_name: str = "gemini-1.5-flash", generativeai_module: Any | None = None) -> None:
+    def __init__(self, api_key: str, model_name: str = "gemini-1.5-flash", genai_module: Any | None = None) -> None:
         if not api_key:
             raise ValueError("GOOGLE_API_KEY is required for Gemini.")
-        genai = generativeai_module or importlib.import_module("google.generativeai")
-        genai.configure(api_key=api_key)
-        self._genai = genai
-        self.model = genai.GenerativeModel(model_name=model_name)
+        # Use only the new google-genai SDK.
+        genai = genai_module or importlib.import_module("google.genai")
+        self._client = genai.Client(api_key=api_key)
+        self._model_name = model_name
 
     async def summarize_profile(self, profile: Profile, owner_bio: str) -> str:
         prompt = (
@@ -30,7 +30,11 @@ class GeminiClient:
             f"Followers: {profile.followers_count or 'N/A'}\n\n"
             "Return only the bullet list, concise and specific."
         )
-        response = await asyncio.to_thread(self.model.generate_content, prompt)
+        response = await asyncio.to_thread(
+            self._client.models.generate_content,
+            model=self._model_name,
+            contents=prompt,
+        )
         text = response.text if hasattr(response, "text") else str(response)
         return text.strip()
 
@@ -47,7 +51,11 @@ class GeminiClient:
             f"Skills: {', '.join(profile.skills[:5]) if profile.skills else 'N/A'}\n\n"
             "Return only the final note, no preface."
         )
-        response = await asyncio.to_thread(self.model.generate_content, prompt)
+        response = await asyncio.to_thread(
+            self._client.models.generate_content,
+            model=self._model_name,
+            contents=prompt,
+        )
         text = response.text if hasattr(response, "text") else str(response)
         return text.strip().replace("\n", " ")[:280]
 

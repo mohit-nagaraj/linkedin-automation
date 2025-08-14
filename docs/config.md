@@ -13,7 +13,8 @@ Use environment variables (via `.env` locally):
 
 - GCP_SERVICE_ACCOUNT_JSON_PATH: Path to service account JSON for Sheets
 - GCP_SERVICE_ACCOUNT_JSON: Inline JSON string (alternative to path)
-- GSHEET_NAME: Target spreadsheet name
+- GSHEET_ID: Spreadsheet ID (preferred). Copy from the sheet URL segment between `/d/` and `/edit`.
+- GSHEET_NAME: Target spreadsheet name (used if ID not set; will create if missing)
 - GSHEET_WORKSHEET: Worksheet name (default "Leads")
 
 OAuth fallback (use this if you prefer OAuth instead of a service account):
@@ -26,5 +27,11 @@ OAuth fallback (use this if you prefer OAuth instead of a service account):
 - NAVIGATION_TIMEOUT_MS: Navigation timeout (ms)
 
 If both `GCP_SERVICE_ACCOUNT_JSON` and `GCP_SERVICE_ACCOUNT_JSON_PATH` are set, the inline JSON is used.
+
+Example:
+```
+GSHEET_ID=1No7dGk6fjc4y-1jpSQ17j7Ea12vG_Q5mU3ndjsQe61w
+GSHEET_WORKSHEET=Leads
+```
 
 

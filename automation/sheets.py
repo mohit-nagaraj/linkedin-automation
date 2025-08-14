@@ -48,7 +48,8 @@ def _oauth_user_creds(client_secrets_path: Optional[str], token_path: str) -> Op
 
 class SheetsClient:
     def __init__(self, json_path: Optional[str], json_blob: Optional[str], spreadsheet_name: str, worksheet_name: str,
-                 oauth_client_secrets_path: Optional[str] = None, oauth_token_path: str = "token.json") -> None:
+                 oauth_client_secrets_path: Optional[str] = None, oauth_token_path: str = "token.json",
+                 spreadsheet_id: Optional[str] = None) -> None:
         creds = _service_account_creds(json_path, json_blob)
         if creds is None:
             user_creds = _oauth_user_creds(oauth_client_secrets_path, oauth_token_path)
@@ -58,7 +59,15 @@ class SheetsClient:
         else:
             client = gspread.authorize(creds)
 
-        self.spreadsheet = client.open(spreadsheet_name)
+        # Open by ID if provided, else by name; if not found by name, create it
+        if spreadsheet_id:
+            self.spreadsheet = client.open_by_key(spreadsheet_id)
+        else:
+            try:
+                self.spreadsheet = client.open(spreadsheet_name)
+            except gspread.exceptions.SpreadsheetNotFound:
+                # Create a new spreadsheet with the provided name
+                self.spreadsheet = client.create(spreadsheet_name)
         try:
             self.worksheet = self.spreadsheet.worksheet(worksheet_name)
         except gspread.exceptions.WorksheetNotFound:

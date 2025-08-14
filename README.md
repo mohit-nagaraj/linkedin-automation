@@ -16,9 +16,11 @@ Note: Automating LinkedIn may violate their Terms. Use responsibly and at your o
 
 ## Quickstart
 
-- Setup and config: see `docs/config.md`
+- Copy `.env.example` to `.env` and set `GSHEET_ID` from your sheet URL
+- More config: see `docs/config.md`
+- Install deps: `& ".venv\\Scripts\\pip" install -r requirements.txt`
 - Run: `python main.py`
-- Testing: `& ".venv\Scripts\python" -m pytest` (see `docs/testing.md`)
+- Tests: `& ".venv\\Scripts\\python" -m pytest` (see `docs/testing.md`)
 
 ## Mohit bio used for personalization
 

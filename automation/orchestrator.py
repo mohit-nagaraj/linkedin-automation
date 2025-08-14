@@ -38,6 +38,7 @@ async def run() -> None:
             worksheet_name=settings.gsheet_worksheet,
             oauth_client_secrets_path=settings.oauth_client_secrets_path,
             oauth_token_path=settings.oauth_token_path,
+            spreadsheet_id=settings.gsheet_id,
         )
 
     gemini = GeminiClient(api_key=settings.google_api_key, model_name="gemini-1.5-flash")
