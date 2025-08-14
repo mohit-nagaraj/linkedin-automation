@@ -1,0 +1,6 @@
+[run]
+omit =
+    automation/linkedin.py
+    automation/__main__.py
+
+

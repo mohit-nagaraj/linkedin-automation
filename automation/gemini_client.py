@@ -1,17 +1,19 @@
 from __future__ import annotations
 
-from typing import Optional
+from typing import Optional, Any
 import asyncio
-import google.generativeai as genai
+import importlib
 
 from .linkedin import Profile
 
 
 class GeminiClient:
-    def __init__(self, api_key: str, model_name: str = "gemini-1.5-flash") -> None:
+    def __init__(self, api_key: str, model_name: str = "gemini-1.5-flash", generativeai_module: Any | None = None) -> None:
         if not api_key:
             raise ValueError("GOOGLE_API_KEY is required for Gemini.")
+        genai = generativeai_module or importlib.import_module("google.generativeai")
         genai.configure(api_key=api_key)
+        self._genai = genai
         self.model = genai.GenerativeModel(model_name=model_name)
 
     async def summarize_profile(self, profile: Profile, owner_bio: str) -> str:

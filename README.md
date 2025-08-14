@@ -45,6 +45,7 @@ GSHEET_NAME=LinkedIn Leads
 GSHEET_WORKSHEET=Leads
 
 HEADLESS=true
+STORAGE_STATE_PATH=.playwright/storage_state.json
 SLOW_MO_MS=0
 NAVIGATION_TIMEOUT_MS=30000
 ```
