@@ -4,7 +4,7 @@ import logging
 import automation.orchestrator as orch
 
 
-def test_orchestrator_enables_logging(monkeypatch, caplog):
+def test_orchestrator_enables_logging(monkeypatch, capsys):
     # Minimal env
     monkeypatch.setenv("LINKEDIN_EMAIL", "u")
     monkeypatch.setenv("LINKEDIN_PASSWORD", "p")
@@ -47,15 +47,14 @@ def test_orchestrator_enables_logging(monkeypatch, caplog):
     monkeypatch.setattr(orch, "GeminiClient", lambda **kwargs: DummyGemini())
     monkeypatch.setattr(orch, "LinkedInAutomation", lambda **kwargs: DummyLI())
 
-    caplog.set_level(logging.INFO)
     loop = asyncio.new_event_loop()
     try:
         asyncio.set_event_loop(loop)
         loop.run_until_complete(orch.run())
-        # Ensure key actions logged
-        messages = " ".join(r.message for r in caplog.records)
-        assert "Starting LinkedIn login" in messages
-        assert "Found 1 profiles" in messages
+        # Ensure key actions logged (Rich logs go to stdout)
+        text = capsys.readouterr().out
+        assert "Starting LinkedIn login" in text
+        assert "Found 1 profiles" in text
     finally:
         loop.close()
 

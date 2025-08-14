@@ -9,6 +9,7 @@ from .linkedin import LinkedInAutomation
 from .gemini_client import GeminiClient
 from .scoring import compute_popularity_score
 from .sheets import SheetsClient
+from .logging_config import configure_logging
 import logging
 
 
@@ -24,7 +25,7 @@ OWNER_BIO = (
 async def run() -> None:
     load_dotenv()
     settings = load_settings()
-    logging.basicConfig(level=logging.DEBUG if settings.debug else logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    configure_logging(logging.DEBUG if settings.debug else logging.INFO, use_rich=True, rich_tracebacks=True)
 
     if not settings.linkedin_email or not settings.linkedin_password:
         raise RuntimeError("Set LINKEDIN_EMAIL and LINKEDIN_PASSWORD environment variables.")
@@ -61,6 +62,7 @@ async def run() -> None:
     ) as li:
         logging.info("Starting LinkedIn login")
         await li.login()
+        logging.info("Login step complete. Proceeding to people search.")
         profile_urls = await li.search_people(settings.search_keywords, settings.locations, max_results=settings.max_profiles)
         logging.info("Found %d profiles", len(profile_urls))
 

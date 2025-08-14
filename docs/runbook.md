@@ -13,4 +13,10 @@ Operational tips:
 - UI changes on LinkedIn can break locators; adjust in `automation/linkedin.py`
 - Be mindful of LinkedIn ToS; keep volumes low and human-like
 
+## Logging
+
+- Colored logs are enabled via Rich. Messages are printed once without duplicated timestamps/levels.
+- Set `DEBUG=true` in `.env` for verbose logs including navigation events (each URL) and search progress.
+- To reduce noise, set `DEBUG=false` (default) for concise INFO logs.
+
 

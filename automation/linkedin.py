@@ -46,6 +46,8 @@ class LinkedInAutomation:
         self.playwright = await async_playwright().start()
         launch_args = dict(channel=self.browser_channel) if self.browser_channel else {}
         if self.use_persistent_context and self.user_data_dir:
+            if self.debug:
+                logging.info("Using persistent profile at %s", self.user_data_dir)
             context = await self.playwright.chromium.launch_persistent_context(
                 user_data_dir=self.user_data_dir,
                 headless=self.headless,
@@ -58,11 +60,14 @@ class LinkedInAutomation:
             storage = None
             if self.storage_state_path and os.path.exists(self.storage_state_path):
                 storage = self.storage_state_path
+                if self.debug:
+                    logging.info("Loading storage state from %s", self.storage_state_path)
             context = await self.browser.new_context(storage_state=storage)
         self.page = await context.new_page()
         self.page.set_default_timeout(self.navigation_timeout_ms)
         if self.debug:
             logging.info("Browser context ready (persistent=%s, user_data_dir=%s)", self.use_persistent_context, self.user_data_dir)
+            self._attach_navigation_logging()
         return self
 
     async def __aexit__(self, exc_type, exc, tb):
@@ -98,6 +103,23 @@ class LinkedInAutomation:
                 await self.page.context.storage_state(path=self.storage_state_path)
             if self.debug:
                 logging.info("Logged in successfully")
+        else:
+            if self.debug:
+                logging.info("Already authenticated; current URL: %s", self.page.url)
+        # Emit explicit checkpoint before continuing
+        logging.info("Login check completed; current URL: %s", self.page.url)
+
+    def _attach_navigation_logging(self) -> None:
+        if not self.page:
+            return
+        page = self.page
+        def _on_nav(frame):
+            try:
+                if frame == page.main_frame:
+                    logging.info("Navigated to %s", frame.url)
+            except Exception:
+                pass
+        page.on("framenavigated", _on_nav)
 
     async def search_people(self, keywords: List[str], locations: List[str], max_results: int = 25) -> List[str]:
         assert self.page is not None
