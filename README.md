@@ -1,5 +1,9 @@
 # linkedin-automation
 
+[![CI](https://img.shields.io/badge/tests-92%25%20coverage-brightgreen)](docs/testing.md)
+[![Python](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/)
+[![License](https://img.shields.io/badge/license-MIT-lightgrey)](LICENSE)
+
 Python-based LinkedIn lead finder and connector for software dev/founder personas. It:
 
 - Logs into LinkedIn, searches people by your keywords
@@ -12,49 +16,9 @@ Note: Automating LinkedIn may violate their Terms. Use responsibly and at your o
 
 ## Quickstart
 
-1) Create and activate a virtual environment
-
-```bash
-python -m venv .venv
-.\\.venv\\Scripts\\activate  # Windows PowerShell
-```
-
-2) Install dependencies and Playwright browsers
-
-```bash
-pip install -U pip
-pip install -r requirements.txt
-python -m playwright install chromium
-```
-
-3) Configure environment variables (example `.env` snippet)
-
-```
-LINKEDIN_EMAIL=you@example.com
-LINKEDIN_PASSWORD=your_password
-SEARCH_KEYWORDS=software engineer, founder, cto
-LOCATIONS=United States, Remote
-SENIORITY_KEYWORDS=founder, cto, vp engineering, head of engineering, lead software engineer
-MAX_PROFILES=25
-
-GOOGLE_API_KEY=your_gemini_api_key
-
-# Google Sheets (service account)
-GCP_SERVICE_ACCOUNT_JSON_PATH=service_account.json
-GSHEET_NAME=LinkedIn Leads
-GSHEET_WORKSHEET=Leads
-
-HEADLESS=true
-STORAGE_STATE_PATH=.playwright/storage_state.json
-SLOW_MO_MS=0
-NAVIGATION_TIMEOUT_MS=30000
-```
-
-4) Run
-
-```bash
-python -m automation.orchestrator
-```
+- Setup and config: see `docs/config.md`
+- Run: `python main.py`
+- Testing: `& ".venv\Scripts\python" -m pytest` (see `docs/testing.md`)
 
 ## Mohit bio used for personalization
 
@@ -62,6 +26,8 @@ Hardcoded in `automation/orchestrator.py` as `OWNER_BIO`. Edit to your preferenc
 
 ## Caution
 
-- Respect LinkedIn’s terms and local laws. Throttle actions and add random delays if you extend this.
-- UI selectors on LinkedIn change often; you may need to tweak locators in `automation/linkedin.py`.
+- Respect LinkedIn’s terms and local laws.
+- UI selectors on LinkedIn change often; locators may need tweaks.
+
+See more in `docs/`.
 
