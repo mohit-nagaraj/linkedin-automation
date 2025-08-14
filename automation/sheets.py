@@ -5,6 +5,9 @@ from typing import Optional, List, Dict, Any
 
 import gspread
 from google.oauth2.service_account import Credentials
+from google.oauth2.credentials import Credentials as UserCredentials
+from google_auth_oauthlib.flow import InstalledAppFlow
+from google.auth.transport.requests import Request
 
 
 SCOPES = [
@@ -13,19 +16,47 @@ SCOPES = [
 ]
 
 
-def _credentials_from_settings(json_path: Optional[str], json_blob: Optional[str]) -> Credentials:
+def _service_account_creds(json_path: Optional[str], json_blob: Optional[str]) -> Optional[Credentials]:
     if json_blob:
         info = json.loads(json_blob)
         return Credentials.from_service_account_info(info, scopes=SCOPES)
     if json_path:
         return Credentials.from_service_account_file(json_path, scopes=SCOPES)
-    raise ValueError("Provide GCP_SERVICE_ACCOUNT_JSON or GCP_SERVICE_ACCOUNT_JSON_PATH for Google Sheets.")
+    return None
+
+
+def _oauth_user_creds(client_secrets_path: Optional[str], token_path: str) -> Optional[UserCredentials]:
+    if not client_secrets_path:
+        return None
+    creds: Optional[UserCredentials] = None
+    try:
+        import os
+        if os.path.exists(token_path):
+            creds = UserCredentials.from_authorized_user_file(token_path, SCOPES)
+        if not creds or not creds.valid:
+            if creds and creds.expired and creds.refresh_token:
+                creds.refresh(Request())
+            else:
+                flow = InstalledAppFlow.from_client_secrets_file(client_secrets_path, SCOPES)
+                creds = flow.run_local_server(port=0)
+            with open(token_path, "w", encoding="utf-8") as token_file:
+                token_file.write(creds.to_json())
+        return creds
+    except Exception:
+        return None
 
 
 class SheetsClient:
-    def __init__(self, json_path: Optional[str], json_blob: Optional[str], spreadsheet_name: str, worksheet_name: str) -> None:
-        creds = _credentials_from_settings(json_path, json_blob)
-        client = gspread.authorize(creds)
+    def __init__(self, json_path: Optional[str], json_blob: Optional[str], spreadsheet_name: str, worksheet_name: str,
+                 oauth_client_secrets_path: Optional[str] = None, oauth_token_path: str = "token.json") -> None:
+        creds = _service_account_creds(json_path, json_blob)
+        if creds is None:
+            user_creds = _oauth_user_creds(oauth_client_secrets_path, oauth_token_path)
+            if user_creds is None:
+                raise ValueError("Google Sheets credentials not configured. Provide service account JSON or set OAUTH_CLIENT_SECRETS_PATH for OAuth.")
+            client = gspread.authorize(user_creds)
+        else:
+            client = gspread.authorize(creds)
 
         self.spreadsheet = client.open(spreadsheet_name)
         try:

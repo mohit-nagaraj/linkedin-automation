@@ -23,6 +23,10 @@ class Settings:
     gsheet_worksheet: str = "Leads"
     storage_state_path: Optional[str] = ".playwright/storage_state.json"
 
+    # OAuth user credentials fallback (if service account not provided)
+    oauth_client_secrets_path: Optional[str] = None
+    oauth_token_path: str = "token.json"
+
     # Runtime
     headless: bool = True
     slow_mo_ms: int = 0
@@ -57,6 +61,8 @@ def load_settings() -> Settings:
         gsheet_name=os.getenv("GSHEET_NAME"),
         gsheet_worksheet=os.getenv("GSHEET_WORKSHEET", "Leads"),
         storage_state_path=os.getenv("STORAGE_STATE_PATH", ".playwright/storage_state.json"),
+        oauth_client_secrets_path=os.getenv("OAUTH_CLIENT_SECRETS_PATH"),
+        oauth_token_path=os.getenv("OAUTH_TOKEN_PATH", "token.json"),
         headless=os.getenv("HEADLESS", "true").lower() in {"1", "true", "yes"},
         slow_mo_ms=int(os.getenv("SLOW_MO_MS", "0")),
         navigation_timeout_ms=int(os.getenv("NAVIGATION_TIMEOUT_MS", "30000")),

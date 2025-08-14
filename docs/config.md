@@ -16,6 +16,10 @@ Use environment variables (via `.env` locally):
 - GSHEET_NAME: Target spreadsheet name
 - GSHEET_WORKSHEET: Worksheet name (default "Leads")
 
+OAuth fallback (use this if you prefer OAuth instead of a service account):
+- OAUTH_CLIENT_SECRETS_PATH: Path to `credentials.json` (OAuth client)
+- OAUTH_TOKEN_PATH: Path to store `token.json` (default `token.json`)
+
 - HEADLESS: true/false for Playwright
 - STORAGE_STATE_PATH: Path to save/load login cookies (default .playwright/storage_state.json)
 - SLOW_MO_MS: Playwright slow motion (ms)
