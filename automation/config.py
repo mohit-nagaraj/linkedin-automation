@@ -35,6 +35,9 @@ class Settings:
     use_persistent_context: bool = True
     user_data_dir: str = ".playwright/user-data"
     browser_channel: str = "chrome"
+    debug: bool = False
+    min_action_delay_ms: int = 0
+    max_action_delay_ms: int = 0
 
 
 def get_env_list(name: str) -> List[str]:
@@ -74,6 +77,9 @@ def load_settings() -> Settings:
         use_persistent_context=os.getenv("USE_PERSISTENT_CONTEXT", "true").lower() in {"1", "true", "yes"},
         user_data_dir=os.getenv("USER_DATA_DIR", ".playwright/user-data"),
         browser_channel=os.getenv("BROWSER_CHANNEL", "chrome"),
+        debug=os.getenv("DEBUG", "false").lower() in {"1", "true", "yes"},
+        min_action_delay_ms=int(os.getenv("MIN_ACTION_DELAY_MS", "0")),
+        max_action_delay_ms=int(os.getenv("MAX_ACTION_DELAY_MS", "0")),
     )
 
 

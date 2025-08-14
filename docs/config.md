@@ -23,11 +23,14 @@ OAuth fallback (use this if you prefer OAuth instead of a service account):
 
 - HEADLESS: true/false for Playwright (default false)
 - STORAGE_STATE_PATH: Path to save/load login cookies (default .playwright/storage_state.json)
+- USER_DATA_DIR: If `USE_PERSISTENT_CONTEXT=true`, Playwright stores browser profile here (sessions, cookies)
 - SLOW_MO_MS: Playwright slow motion (ms)
 - NAVIGATION_TIMEOUT_MS: Navigation timeout (ms)
 - USE_PERSISTENT_CONTEXT: true/false to use persistent user data dir (default true)
 - USER_DATA_DIR: Directory for persistent profile (default .playwright/user-data)
 - BROWSER_CHANNEL: Browser channel (e.g., chrome) to use the installed Chrome
+- DEBUG: true/false to enable verbose logging
+- MIN_ACTION_DELAY_MS / MAX_ACTION_DELAY_MS: random pause window between actions (ms)
 
 If both `GCP_SERVICE_ACCOUNT_JSON` and `GCP_SERVICE_ACCOUNT_JSON_PATH` are set, the inline JSON is used.
 

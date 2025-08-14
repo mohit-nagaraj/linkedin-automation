@@ -50,6 +50,10 @@ def test_orchestrator_main_flow(monkeypatch):
     monkeypatch.setenv("SEARCH_KEYWORDS", "cto")
     monkeypatch.setenv("GOOGLE_API_KEY", "k")
     monkeypatch.setenv("GSHEET_NAME", "Leads")
+    # debug and delays
+    monkeypatch.setenv("DEBUG", "1")
+    monkeypatch.setenv("MIN_ACTION_DELAY_MS", "100")
+    monkeypatch.setenv("MAX_ACTION_DELAY_MS", "200")
 
     dummy_sheets = DummySheets()
 

@@ -3,6 +3,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Optional, List, Dict, Any
 import asyncio
+import random
+import time
+import logging
 
 from playwright.async_api import async_playwright, Browser, Page
 import os
@@ -21,7 +24,7 @@ class Profile:
 
 
 class LinkedInAutomation:
-    def __init__(self, email: str, password: str, headless: bool = False, slow_mo_ms: int = 0, navigation_timeout_ms: int = 30000, storage_state_path: str | None = None, use_persistent_context: bool = True, user_data_dir: str | None = None, browser_channel: str | None = None):
+    def __init__(self, email: str, password: str, headless: bool = False, slow_mo_ms: int = 0, navigation_timeout_ms: int = 30000, storage_state_path: str | None = None, use_persistent_context: bool = True, user_data_dir: str | None = None, browser_channel: str | None = None, debug: bool = False, min_action_delay_ms: int = 0, max_action_delay_ms: int = 0):
         self.email = email
         self.password = password
         self.headless = headless
@@ -31,6 +34,9 @@ class LinkedInAutomation:
         self.use_persistent_context = use_persistent_context
         self.user_data_dir = user_data_dir
         self.browser_channel = browser_channel
+        self.debug = debug
+        self.min_action_delay_ms = min_action_delay_ms
+        self.max_action_delay_ms = max_action_delay_ms
         self.browser: Optional[Browser] = None
         self.page: Optional[Page] = None
 
@@ -53,6 +59,8 @@ class LinkedInAutomation:
             context = await self.browser.new_context(storage_state=storage)
         self.page = await context.new_page()
         self.page.set_default_timeout(self.navigation_timeout_ms)
+        if self.debug:
+            logging.info("Browser context ready (persistent=%s, user_data_dir=%s)", self.use_persistent_context, self.user_data_dir)
         return self
 
     async def __aexit__(self, exc_type, exc, tb):
@@ -62,8 +70,12 @@ class LinkedInAutomation:
 
     async def login(self) -> None:
         assert self.page is not None
+        if self.debug:
+            logging.info("Navigating to feed")
         await self.page.goto("https://www.linkedin.com/feed/", wait_until="domcontentloaded")
         if "login" in self.page.url:
+            if self.debug:
+                logging.info("Navigating to login")
             await self.page.goto("https://www.linkedin.com/login", wait_until="domcontentloaded")
             await self.page.fill("input#username", self.email)
             await self.page.fill("input#password", self.password)
@@ -77,10 +89,14 @@ class LinkedInAutomation:
             if self.storage_state_path and (not self.use_persistent_context):
                 os.makedirs(os.path.dirname(self.storage_state_path), exist_ok=True)
                 await self.page.context.storage_state(path=self.storage_state_path)
+            if self.debug:
+                logging.info("Logged in successfully")
 
     async def search_people(self, keywords: List[str], locations: List[str], max_results: int = 25) -> List[str]:
         assert self.page is not None
         query = "%20".join([k.replace(" ", "%20") for k in keywords])
+        if self.debug:
+            logging.info("Searching people: %s", ", ".join(keywords))
         await self.page.goto(f"https://www.linkedin.com/search/results/people/?keywords={query}")
 
         # Optionally filter by locations if available
@@ -99,11 +115,13 @@ class LinkedInAutomation:
                         break
             # Scroll to load more
             await self.page.evaluate("window.scrollBy(0, document.body.scrollHeight)")
-            await asyncio.sleep(1.2)
+            await self._human_pause()
         return profile_urls[:max_results]
 
     async def scrape_profile(self, profile_url: str) -> Profile:
         assert self.page is not None
+        if self.debug:
+            logging.info("Scraping profile: %s", profile_url)
         await self.page.goto(profile_url)
         await self.page.wait_for_load_state("domcontentloaded")
 
@@ -173,6 +191,8 @@ class LinkedInAutomation:
 
     async def connect_with_note(self, profile_url: str, note: str) -> bool:
         assert self.page is not None
+        if self.debug:
+            logging.info("Connecting with note: %s", profile_url)
         await self.page.goto(profile_url)
         await self.page.wait_for_load_state("domcontentloaded")
 
@@ -197,6 +217,16 @@ class LinkedInAutomation:
         if await send_btn.count() == 0:
             return False
         await send_btn.click()
+        if self.debug:
+            logging.info("Connection request sent")
         return True
+
+    async def _human_pause(self):
+        if self.max_action_delay_ms <= 0 and self.min_action_delay_ms <= 0:
+            await asyncio.sleep(0.8)
+            return
+        low = max(0, self.min_action_delay_ms) / 1000.0
+        high = max(low, self.max_action_delay_ms / 1000.0)
+        await asyncio.sleep(random.uniform(low, high))
 
 
