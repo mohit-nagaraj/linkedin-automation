@@ -62,7 +62,14 @@ class SheetsClient:
 
         # Open by ID if provided, else by name; if not found by name, create it
         if spreadsheet_id:
-            self.spreadsheet = client.open_by_key(spreadsheet_id)
+            try:
+                self.spreadsheet = client.open_by_key(spreadsheet_id)
+                logging.info("Successfully opened spreadsheet with ID: %s", spreadsheet_id)
+            except gspread.exceptions.APIError as e:
+                if e.response.status_code == 403:
+                    logging.error("Permission denied accessing spreadsheet. Please share the sheet with your service account email.")
+                    logging.error("Check your service_account.json for the 'client_email' field and share the sheet with that email.")
+                raise
         else:
             try:
                 self.spreadsheet = client.open(spreadsheet_name)
@@ -82,7 +89,8 @@ class SheetsClient:
                 "popularity_score",
                 "summary",
                 "note",
-                "connected",
+                "connect_sent",
+                "connection_accepted",  # For future implementation
             ])
 
     def append_lead(self, row: List[Any]) -> int:

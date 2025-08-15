@@ -55,7 +55,7 @@ async def run() -> None:
     else:
         logging.warning("Google Sheets not configured - GSHEET_NAME or GSHEET_ID not set")
 
-    gemini = GeminiClient(api_key=settings.google_api_key, model_name="gemini-1.5-flash")
+    gemini = GeminiClient(api_key=settings.google_api_key, model_name="gemini-2.5-flash-preview-05-20")
 
     async with LinkedInAutomation(
         email=settings.linkedin_email,
@@ -90,8 +90,12 @@ async def run() -> None:
                     0,  # popularity score (to be filled later)
                     "",  # summary (to be filled later)
                     "",  # note (to be filled later)
-                    result.connection_status,  # connection status from search
+                    "no",  # connect_sent (will be updated after connection attempt)
+                    "",  # connection_accepted (for future implementation)
                 ]
+                logging.info("Appending to sheet - Row %d data: Name=%s, Status=%s, URL=%s", 
+                            idx, result.name or "Unknown", result.connection_status, result.profile_url)
+                logging.debug("Full row data: %s", initial_row_data)
                 row_num = sheets.append_lead(initial_row_data)
                 row_mapping[result.profile_url] = row_num
                 logging.debug("Added search result %d/%d to row %d: %s", idx, len(search_results), row_num, result.name or "Unknown")
@@ -119,6 +123,9 @@ async def run() -> None:
                     "location": profile.location or "",
                     "popularity_score": popularity,
                 }
+                logging.info("Updating row %d with profile data: Name=%s, Score=%d", 
+                            row_num, profile.name, popularity)
+                logging.debug("Profile update data: %s", updates)
                 sheets.update_row(row_num, updates)
                 logging.debug("Updated profile data for row %d: %s", row_num, profile.name)
             
@@ -136,18 +143,26 @@ async def run() -> None:
 
             # Try to connect (only if not already connected)
             if result.connection_status != "connected":
-                connected = False
+                connect_sent = False
                 try:
-                    connected = await li.connect_with_note(url, note)
+                    connect_sent = await li.connect_with_note(url, note)
+                    if connect_sent:
+                        logging.info("Successfully sent connection request to %s", profile.name)
+                    else:
+                        logging.info("Could not send connection request to %s (button not found or already pending)", profile.name)
                 except Exception as e:
-                    logging.warning("Failed to connect with %s: %s", url, str(e))
-                    connected = False
+                    logging.warning("Failed to send connection request to %s: %s", profile.name, str(e))
+                    connect_sent = False
                 
                 if sheets and row_num:
-                    sheets.update_cell(row_num, "connected", "yes" if connected else "no")
-                    logging.info("Updated connection status for %s: %s", profile.name, "Connected" if connected else "Not Connected")
+                    sheets.update_cell(row_num, "connect_sent", "yes" if connect_sent else "no")
+                    logging.info("Updated connect_sent status for %s: %s", profile.name, "yes" if connect_sent else "no")
             else:
                 logging.info("Skipping connection for %s (already connected)", profile.name)
+                if sheets and row_num:
+                    # Mark as already connected (connection was sent in the past and accepted)
+                    sheets.update_cell(row_num, "connect_sent", "yes")
+                    sheets.update_cell(row_num, "connection_accepted", "yes")
             
             processed_count += 1
             

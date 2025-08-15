@@ -9,7 +9,7 @@ from .linkedin import Profile
 
 
 class GeminiClient:
-    def __init__(self, api_key: str, model_name: str = "gemini-1.5-flash", genai_module: Any | None = None) -> None:
+    def __init__(self, api_key: str, model_name: str = "gemini-2.5-flash-preview-05-20", genai_module: Any | None = None) -> None:
         if not api_key:
             raise ValueError("GOOGLE_API_KEY is required for Gemini.")
         # Use only the new google-genai SDK.
