@@ -11,4 +11,9 @@ Heuristics (0–100):
 
 Tune the weights in `compute_popularity_score` as you learn what correlates with your outreach goals.
 
+### Recent Updates
+- **Integration with MAX_PROFILES**: Scoring respects processing limits
+- **Enhanced Logging**: Better visibility into scoring decisions
+- **Performance Optimization**: Efficient scoring algorithms for large profile sets
+
 

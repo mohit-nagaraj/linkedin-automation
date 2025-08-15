@@ -11,10 +11,11 @@
 ### Data flow
 1. Load `.env` and environment variables
 2. Start LinkedInAutomation (reuse storage state if present)
-3. Search people → collect profile URLs
-4. For each URL: scrape → score → summarize → craft note
+3. Search people → collect profile URLs (with connection status filtering)
+4. For each URL (up to MAX_PROFILES): scrape → score → summarize → craft note
 5. Attempt connect with note
 6. Append result row to Google Sheet
+7. Stop processing when MAX_PROFILES limit is reached
 
 ### Sequence
 ```mermaid
@@ -47,8 +48,17 @@ sequenceDiagram
 - Reuses Playwright `storage_state.json` to avoid re-login
 - Saved after successful login
 
+### Key Features
+- **Connection Status Filtering**: Only processes unconnected profiles (filters out "Message" button profiles)
+- **Pagination Support**: Automatically moves to next page when no new profiles found
+- **MAX_PROFILES Limit**: Respects user-defined processing limits
+- **Robust Selectors**: Multiple fallback selectors for LinkedIn's changing DOM
+- **Detailed Logging**: Comprehensive logging for debugging and monitoring
+
 ### Notes
 - LinkedIn DOM changes; locators may need updates
 - Add throttling/random delays if extending volume
+- Connection status filtering improves efficiency by focusing on unconnected profiles
+- Pagination ensures maximum profile collection across multiple search pages
 
 

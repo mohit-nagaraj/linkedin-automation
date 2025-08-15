@@ -6,11 +6,13 @@
 
 Python-based LinkedIn lead finder and connector for software dev/founder personas. It:
 
-- Logs into LinkedIn, searches people by your keywords
+- Logs into LinkedIn, searches people by your keywords with **pagination support**
+- **Filters by connection status** - only processes unconnected profiles
 - Scrapes visible profile info (name, headline, location, about, top experiences, skills, followers)
 - Uses Google Gemini 1.5 Flash to generate a concise profile summary and a personalized 280-char connect note
 - Sends a connection request with note
 - Stores leads into Google Sheets so you can review on mobile
+- **Respects MAX_PROFILES limit** - stops processing after reaching your specified limit
 
 Note: Automating LinkedIn may violate their Terms. Use responsibly and at your own risk.
 
@@ -22,6 +24,23 @@ Note: Automating LinkedIn may violate their Terms. Use responsibly and at your o
 - Run: `python main.py`
 - Tests: `& ".venv\\Scripts\\python" -m pytest` (see `docs/testing.md`)
 
+## Key Features
+
+### 🔍 Smart Profile Collection
+- **Connection Status Filtering**: Automatically skips already connected profiles
+- **Pagination Support**: Searches across multiple pages for maximum results
+- **Robust Selectors**: Multiple fallback selectors for LinkedIn's changing DOM
+
+### 📊 Processing Control
+- **MAX_PROFILES Limit**: Set your processing limit in environment variables
+- **Real-time Updates**: Each profile is processed and added to sheets immediately
+- **Detailed Logging**: Comprehensive logging for monitoring and debugging
+
+### 🤖 AI-Powered Personalization
+- **Smart Summaries**: AI-generated profile summaries using Google Gemini
+- **Personalized Notes**: Custom connection notes based on profile analysis
+- **Popularity Scoring**: Intelligent scoring based on followers, skills, and experience
+
 ## Mohit bio used for personalization
 
 Hardcoded in `automation/orchestrator.py` as `OWNER_BIO`. Edit to your preference.
@@ -30,6 +49,7 @@ Hardcoded in `automation/orchestrator.py` as `OWNER_BIO`. Edit to your preferenc
 
 - Respect LinkedIn’s terms and local laws.
 - UI selectors on LinkedIn change often; locators may need tweaks.
+- Use responsibly and consider rate limiting for large-scale operations.
 
 See more in `docs/`.
 
