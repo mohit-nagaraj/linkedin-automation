@@ -63,58 +63,80 @@ async def run() -> None:
         logging.info("Starting LinkedIn login")
         await li.login()
         logging.info("Login step complete. Proceeding to people search.")
-        profile_urls = await li.search_people(settings.search_keywords, settings.locations, max_results=settings.max_profiles)
-        logging.info("Found %d profiles", len(profile_urls))
+        search_results = await li.search_people(settings.search_keywords, settings.locations, max_results=settings.max_profiles)
+        logging.info("Found %d profiles", len(search_results))
 
+        # Step 1: Save all search results to Google Sheets first
+        row_mapping = {}  # Map profile URLs to row numbers
+        if sheets:
+            logging.info("Saving search results to Google Sheets...")
+            for idx, result in enumerate(search_results, 1):
+                initial_row_data = [
+                    result.name or "Unknown",
+                    result.headline or "",
+                    result.location or "",
+                    result.profile_url,
+                    0,  # popularity score (to be filled later)
+                    "",  # summary (to be filled later)
+                    "",  # note (to be filled later)
+                    result.connection_status,  # connection status from search
+                ]
+                row_num = sheets.append_lead(initial_row_data)
+                row_mapping[result.profile_url] = row_num
+                logging.debug("Added search result %d/%d to row %d: %s", idx, len(search_results), row_num, result.name or "Unknown")
+            logging.info("Saved %d search results to Google Sheets", len(search_results))
+
+        # Step 2: Process each profile for detailed scraping
         processed_count = 0
-        logging.info("Starting to process %d profiles (MAX_PROFILES=%d)", len(profile_urls), settings.max_profiles)
+        logging.info("Starting to process %d profiles (MAX_PROFILES=%d)", len(search_results), settings.max_profiles)
         
-        for url in profile_urls:
+        for result in search_results:
+            url = result.profile_url
+            row_num = row_mapping.get(url) if sheets else None
+            
             logging.info("Processing profile %d/%d: %s", processed_count + 1, settings.max_profiles, url)
             
-            # Step 1: Scrape profile
+            # Scrape full profile details
             profile = await li.scrape_profile(url)
             popularity = compute_popularity_score(profile, settings.seniority_keywords)
             
-            # Step 2: Immediately add basic info to sheet
-            row_num = None
-            if sheets:
-                initial_row_data = [
-                    profile.name,
-                    profile.headline,
-                    profile.location or "",
-                    profile.profile_url,
-                    popularity,
-                    "",  # summary (to be filled later)
-                    "",  # note (to be filled later)
-                    "pending",  # connection status
-                ]
-                row_num = sheets.append_lead(initial_row_data)
-                logging.info("Added basic info to Google Sheets row %d: %s", row_num, profile.name)
+            # Update the row with scraped profile data
+            if sheets and row_num:
+                updates = {
+                    "name": profile.name,  # Update with accurate name from profile
+                    "headline": profile.headline,
+                    "location": profile.location or "",
+                    "popularity_score": popularity,
+                }
+                sheets.update_row(row_num, updates)
+                logging.debug("Updated profile data for row %d: %s", row_num, profile.name)
             
-            # Step 3: Generate summary asynchronously and update sheet
+            # Generate summary and update
             summary = await gemini.summarize_profile(profile, OWNER_BIO)
             if sheets and row_num:
                 sheets.update_cell(row_num, "summary", summary)
                 logging.debug("Updated summary for row %d", row_num)
             
-            # Step 4: Generate connection note and update sheet
+            # Generate connection note and update
             note = await gemini.craft_connect_note(profile, OWNER_BIO)
             if sheets and row_num:
                 sheets.update_cell(row_num, "note", note)
                 logging.debug("Updated note for row %d", row_num)
 
-            # Step 5: Try to connect and update status
-            connected = False
-            try:
-                connected = await li.connect_with_note(url, note)
-            except Exception as e:
-                logging.warning("Failed to connect with %s: %s", url, str(e))
+            # Try to connect (only if not already connected)
+            if result.connection_status != "connected":
                 connected = False
-            
-            if sheets and row_num:
-                sheets.update_cell(row_num, "connected", "yes" if connected else "no")
-                logging.info("Updated connection status for %s: %s", profile.name, "Connected" if connected else "Not Connected")
+                try:
+                    connected = await li.connect_with_note(url, note)
+                except Exception as e:
+                    logging.warning("Failed to connect with %s: %s", url, str(e))
+                    connected = False
+                
+                if sheets and row_num:
+                    sheets.update_cell(row_num, "connected", "yes" if connected else "no")
+                    logging.info("Updated connection status for %s: %s", profile.name, "Connected" if connected else "Not Connected")
+            else:
+                logging.info("Skipping connection for %s (already connected)", profile.name)
             
             processed_count += 1
             
