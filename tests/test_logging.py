@@ -24,6 +24,9 @@ def test_orchestrator_enables_logging(monkeypatch, capsys):
             logging.info("search called")
             from automation.linkedin import SearchResult
             return [SearchResult(name="n", headline="h", location="loc", profile_url="https://x/in/a")]
+        async def search_people(self, k, l, max_results=25):
+            logging.info("search_people called")
+            return ["https://x/in/a"]
         async def scrape_profile(self, url):
             from automation.linkedin import Profile
             return Profile("n","h","loc",url,"about",[],[],100)

@@ -14,6 +14,8 @@ class DummyLI:
     async def search_people_listings(self, keywords, locations, max_results=25):
         from automation.linkedin import SearchResult
         return [SearchResult(name="Jane", headline="CTO", location="Remote", profile_url="https://www.linkedin.com/in/jane")]
+    async def search_people(self, keywords, locations, max_results=25):
+        return ["https://www.linkedin.com/in/jane"]
     async def scrape_profile(self, url):
         from automation.linkedin import Profile
         return Profile(

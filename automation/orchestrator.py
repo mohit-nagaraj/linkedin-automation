@@ -66,7 +66,12 @@ async def run() -> None:
         profile_urls = await li.search_people(settings.search_keywords, settings.locations, max_results=settings.max_profiles)
         logging.info("Found %d profiles", len(profile_urls))
 
+        processed_count = 0
+        logging.info("Starting to process %d profiles (MAX_PROFILES=%d)", len(profile_urls), settings.max_profiles)
+        
         for url in profile_urls:
+            logging.info("Processing profile %d/%d: %s", processed_count + 1, settings.max_profiles, url)
+            
             profile = await li.scrape_profile(url)
             popularity = compute_popularity_score(profile, settings.seniority_keywords)
             summary = await gemini.summarize_profile(profile, OWNER_BIO)
@@ -75,11 +80,12 @@ async def run() -> None:
             connected = False
             try:
                 connected = await li.connect_with_note(url, note)
-            except Exception:
+            except Exception as e:
+                logging.warning("Failed to connect with %s: %s", url, str(e))
                 connected = False
 
             if sheets:
-                sheets.append_lead([
+                row_data = [
                     profile.name,
                     profile.headline,
                     profile.location or "",
@@ -88,7 +94,20 @@ async def run() -> None:
                     summary,
                     note,
                     "yes" if connected else "no",
-                ])
+                ]
+                sheets.append_lead(row_data)
+                logging.info("Added to Google Sheets: %s (%s)", profile.name, "Connected" if connected else "Not Connected")
+            
+            processed_count += 1
+            
+            # Check if we've reached MAX_PROFILES
+            if processed_count >= settings.max_profiles:
+                logging.info("Reached MAX_PROFILES (%d), stopping processing", settings.max_profiles)
+                if sheets:
+                    logging.info("Google Sheets updated with %d profiles", processed_count)
+                break
+        
+        logging.info("Finished processing %d profiles", processed_count)
 
 
 def main() -> None:

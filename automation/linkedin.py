@@ -131,34 +131,127 @@ class LinkedInAutomation:
 
     async def search_people(self, keywords: List[str], locations: List[str], max_results: int = 25) -> List[str]:
         assert self.page is not None
-        query = "%20".join([k.replace(" ", "%20") for k in keywords])
         if self.debug:
             logging.info("Searching people with keywords: %s", ", ".join(keywords))
-        await self.page.goto(f"https://www.linkedin.com/search/results/people/?keywords={query}")
-
-        # Optionally filter by locations if available
-        # For simplicity, rely on keyword search; location filtering can be added via UI interaction.
 
         profile_urls: List[str] = []
-        page_round = 0
+        page_number = 1
+        stagnant_rounds = 0
+        max_stagnant_rounds = 3  # Number of rounds without new profiles before trying next page
+        
         while len(profile_urls) < max_results:
-            page_round += 1
-            cards = await self.page.locator("a.app-aware-link:has(img)" ).all()
-            for card in cards:
-                href = await card.get_attribute("href")
-                if not href:
-                    continue
-                if "/in/" in href and href not in profile_urls:
-                    profile_urls.append(href.split("?")[0])
-                    if len(profile_urls) >= max_results:
-                        break
-            # Scroll to load more
-            await self.page.evaluate("window.scrollBy(0, document.body.scrollHeight)")
+            # Build URL with page number
+            url = self._build_search_url(keywords, page_number)
             if self.debug:
-                logging.debug("Search page round %d: collected %d profiles so far", page_round, len(profile_urls))
+                logging.info("Loading search page %d", page_number)
+            
+            await self.page.goto(url, wait_until="domcontentloaded")
             await self._human_pause()
+            
+            page_round = 0
+            profiles_before_round = len(profile_urls)
+            
+            # Scroll through current page to load more results
+            while len(profile_urls) < max_results and page_round < 10:  # Max 10 scroll rounds per page
+                page_round += 1
+                
+                # Try multiple selectors to find profile links
+                cards = await self.page.locator("a[href*='/in/']").all()
+                if len(cards) == 0:
+                    # Fallback to the old selector
+                    cards = await self.page.locator("a.app-aware-link:has(img)").all()
+                
+                for card in cards:
+                    href = await card.get_attribute("href")
+                    if not href:
+                        continue
+                    if "/in/" in href and href not in profile_urls:
+                        # Check if this profile is already connected by looking for the button text
+                        profile_url = href.split("?")[0]
+                        
+                        # Find the parent container of this card to look for the button
+                        try:
+                            # Look for the button in the same card/container
+                            card_container = await self.page.locator(f"a[href='{href}']").locator("xpath=..").first
+                            if await card_container.count() > 0:
+                                button = await card_container.locator("button").first
+                                if await button.count() > 0:
+                                    button_text = await button.text_content()
+                                if button_text:
+                                    button_text = button_text.strip().lower()
+                                    # If button says "message", we're already connected
+                                    if "message" in button_text:
+                                        if self.debug:
+                                            logging.debug("Skipping connected profile: %s (button: %s)", profile_url, button_text)
+                                        continue
+                                    # If button says "connect" or "follow", we're not connected
+                                    elif "connect" in button_text or "follow" in button_text:
+                                        if self.debug:
+                                            logging.debug("Adding unconnected profile: %s (button: %s)", profile_url, button_text)
+                                        profile_urls.append(profile_url)
+                                    else:
+                                        # Unknown button state, add it anyway
+                                        if self.debug:
+                                            logging.debug("Adding profile with unknown connection status: %s (button: %s)", profile_url, button_text)
+                                        profile_urls.append(profile_url)
+                                else:
+                                    # No button text found, add it anyway
+                                    if self.debug:
+                                        logging.debug("Adding profile (no button text found): %s", profile_url)
+                                    profile_urls.append(profile_url)
+                            else:
+                                # No button found, add it anyway
+                                if self.debug:
+                                    logging.debug("Adding profile (no button found): %s", profile_url)
+                                profile_urls.append(profile_url)
+                        except Exception as e:
+                            # If there's any error checking the button, add the profile anyway
+                            if self.debug:
+                                logging.debug("Error checking connection status for %s: %s, adding anyway", profile_url, str(e))
+                            profile_urls.append(profile_url)
+                        else:
+                            # If no button found or other issues, add the profile anyway
+                            if self.debug:
+                                logging.debug("Adding profile (no connection status check): %s", profile_url)
+                            profile_urls.append(profile_url)
+                        
+                        if len(profile_urls) >= max_results:
+                            break
+                
+                # Scroll to load more on current page
+                await self.page.evaluate("window.scrollBy(0, document.body.scrollHeight)")
+                if self.debug:
+                    logging.debug("Page %d, round %d: collected %d profiles so far", page_number, page_round, len(profile_urls))
+                await self._human_pause()
+            
+            # Check if we found new profiles on this page
+            profiles_after_round = len(profile_urls)
+            if profiles_after_round == profiles_before_round:
+                stagnant_rounds += 1
+                if self.debug:
+                    logging.info("No new profiles found on page %d (stagnant round %d/%d)", page_number, stagnant_rounds, max_stagnant_rounds)
+            else:
+                stagnant_rounds = 0  # Reset stagnant counter if we found profiles
+                if self.debug:
+                    logging.info("Found %d new profiles on page %d", profiles_after_round - profiles_before_round, page_number)
+            
+            # If we've been stagnant for too many rounds, try next page
+            if stagnant_rounds >= max_stagnant_rounds:
+                if self.debug:
+                    logging.info("No new profiles after %d rounds, trying next page", stagnant_rounds)
+                page_number += 1
+                stagnant_rounds = 0  # Reset for new page
+                continue
+            
+            # If we haven't found any profiles on this page after scrolling, try next page
+            if profiles_after_round == profiles_before_round:
+                page_number += 1
+                if self.debug:
+                    logging.info("No profiles found on page %d, moving to page %d", page_number - 1, page_number)
+                continue
+        
         if self.debug:
-            logging.info("Collected %d profile URLs", len(profile_urls[:max_results]))
+            logging.info("Collected %d profile URLs across %d pages", len(profile_urls[:max_results]), page_number)
         return profile_urls[:max_results]
 
     def _build_search_url(self, keywords: List[str], page_number: int) -> str:
@@ -182,7 +275,10 @@ class LinkedInAutomation:
             count = await item_loc.count()
             if count == 0:
                 # Try a simpler anchor selection as fallback
-                cards = await self.page.locator("a.app-aware-link[href*='/in/']").all()
+                cards = await self.page.locator("a[href*='/in/']").all()
+                if len(cards) == 0:
+                    # Fallback to the old selector
+                    cards = await self.page.locator("a.app-aware-link[href*='/in/']").all()
                 if len(cards) == 0:
                     if self.debug:
                         logging.info("No results on page %d; stopping.", page_number)
@@ -202,7 +298,9 @@ class LinkedInAutomation:
                 start_len = len(results)
                 for i in range(count):
                     item = item_loc.nth(i)
-                    link = item.locator("a.app-aware-link[href*='/in/']").first
+                    link = item.locator("a[href*='/in/']").first
+                    if await link.count() == 0:
+                        link = item.locator("a.app-aware-link[href*='/in/']").first
                     href = await link.get_attribute("href") if await link.count() > 0 else None
                     if not href:
                         continue
