@@ -82,15 +82,22 @@ class SheetsClient:
         except gspread.exceptions.WorksheetNotFound:
             self.worksheet = self.spreadsheet.add_worksheet(title=worksheet_name, rows=1000, cols=20)
             self.worksheet.append_row([
-                "name",
-                "headline",
-                "location",
-                "profile_url",
-                "popularity_score",
-                "summary",
-                "note",
-                "connect_sent",
-                "connection_accepted",  # For future implementation
+                "Name",
+                "Position",
+                "Headline",
+                "Location",
+                "Profile URL",
+                "Popularity Score",
+                "Summary",
+                "Connection Note",
+                "Connect Sent",
+                "Connection Status",
+                "Date Added",
+                "Last Updated",
+                "About",
+                "Experience",
+                "Education",
+                "Skills",
             ])
 
     def append_lead(self, row: List[Any]) -> int:
@@ -137,6 +144,23 @@ class SheetsClient:
             result = chr(65 + col_num % 26) + result
             col_num //= 26
         return result
+    
+    def find_row_by_url(self, profile_url: str) -> Optional[int]:
+        """Find the row number for a given profile URL."""
+        all_values = self.worksheet.get_all_values()
+        headers = all_values[0] if all_values else []
+        
+        if "Profile URL" not in headers:
+            return None
+        
+        url_col_idx = headers.index("Profile URL")
+        
+        for row_idx, row in enumerate(all_values[1:], start=2):  # Start from row 2 (skip header)
+            if row_idx <= len(all_values) and url_col_idx < len(row):
+                if row[url_col_idx] == profile_url:
+                    return row_idx
+        
+        return None
     
     def update_cell(self, row_num: int, col_name: str, value: Any) -> None:
         """Update a single cell in the sheet.

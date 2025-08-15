@@ -471,31 +471,108 @@ class LinkedInAutomation:
             logging.info("Connecting with note: %s", profile_url)
         await self.page.goto(profile_url)
         await self.page.wait_for_load_state("domcontentloaded")
+        await asyncio.sleep(2)  # Wait for page to fully load
 
-        # Try connect flow
-        connect_button = self.page.get_by_role("button", name="Connect").first
-        if await connect_button.count() == 0:
-            # Fallback in actions dropdown
-            more_btn = self.page.get_by_role("button", name="More").first
-            if await more_btn.count() > 0:
-                await more_btn.click()
-                connect_button = self.page.get_by_role("button", name="Connect").first
-        if await connect_button.count() == 0:
+        # Try multiple selectors for Connect button
+        connect_button = None
+        
+        # Method 1: Try button with aria-label containing "Invite" and "to connect"
+        try:
+            connect_button = await self.page.wait_for_selector(
+                'button[aria-label*="Invite"][aria-label*="to connect"]',
+                timeout=3000
+            )
+            logging.info("Found connect button using aria-label selector")
+        except:
+            pass
+        
+        # Method 2: Try button with span containing "Connect" text
+        if not connect_button:
+            try:
+                connect_button = await self.page.wait_for_selector(
+                    'button:has(span.artdeco-button__text:text("Connect"))',
+                    timeout=3000
+                )
+                logging.info("Found connect button using span text selector")
+            except:
+                pass
+        
+        # Method 3: Try role-based selector
+        if not connect_button:
+            connect_button = self.page.get_by_role("button", name="Connect").first
+            if await connect_button.count() == 0:
+                # Fallback: Check in More actions dropdown
+                more_btn = self.page.get_by_role("button", name="More").first
+                if await more_btn.count() > 0:
+                    await more_btn.click()
+                    await asyncio.sleep(1)
+                    connect_button = self.page.get_by_role("button", name="Connect").first
+        
+        if not connect_button or (hasattr(connect_button, 'count') and await connect_button.count() == 0):
+            logging.warning("Connect button not found on profile: %s", profile_url)
             return False
 
-        await connect_button.click()
-        add_note_btn = self.page.get_by_role("button", name="Add a note").first
-        if await add_note_btn.count() == 0:
+        # Click Connect button
+        if hasattr(connect_button, 'click'):
+            await connect_button.click()
+        else:
+            await connect_button.first.click()
+        
+        await asyncio.sleep(2)  # Wait for modal to appear
+        
+        # Check for Add a Note button
+        add_note_btn = None
+        try:
+            add_note_btn = await self.page.wait_for_selector(
+                'button:has-text("Add a note")',
+                timeout=3000
+            )
+        except:
+            add_note_btn = self.page.get_by_role("button", name="Add a note").first
+        
+        if not add_note_btn or (hasattr(add_note_btn, 'count') and await add_note_btn.count() == 0):
+            logging.warning("Add a note button not found")
             return False
-        await add_note_btn.click()
-        await self.page.fill("textarea[name='message']", note[:280])
-        send_btn = self.page.get_by_role("button", name="Send").first
-        if await send_btn.count() == 0:
+        
+        # Click Add a Note
+        if hasattr(add_note_btn, 'click'):
+            await add_note_btn.click()
+        else:
+            await add_note_btn.first.click()
+        
+        await asyncio.sleep(1)
+        
+        # Fill in the note
+        try:
+            textarea = await self.page.wait_for_selector('textarea[name="message"]', timeout=3000)
+            await textarea.fill(note[:280])
+            logging.info("Filled connection note: %s", note[:50] + "...")
+        except:
+            logging.warning("Could not find message textarea")
             return False
-        await send_btn.click()
-        if self.debug:
-            logging.info("Connection request sent")
-        return True
+        
+        # FOR TESTING: Don't actually send the connection request
+        logging.info("TEST MODE: Not sending connection request. Would have sent with note: %s", note[:100] + "...")
+        
+        # Close the modal instead of sending
+        try:
+            cancel_btn = self.page.get_by_role("button", name="Cancel").first
+            if await cancel_btn.count() > 0:
+                await cancel_btn.click()
+                logging.info("Closed connection modal (test mode)")
+        except:
+            # Try pressing Escape
+            await self.page.keyboard.press("Escape")
+        
+        # In production, uncomment these lines:
+        # send_btn = self.page.get_by_role("button", name="Send").first
+        # if await send_btn.count() == 0:
+        #     return False
+        # await send_btn.click()
+        # if self.debug:
+        #     logging.info("Connection request sent")
+        
+        return True  # Return True for testing purposes
 
     async def _human_pause(self):
         if self.max_action_delay_ms <= 0 and self.min_action_delay_ms <= 0:

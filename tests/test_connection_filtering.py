@@ -1,5 +1,5 @@
 import pytest
-from unittest.mock import Mock, AsyncMock
+from unittest.mock import Mock, AsyncMock, patch
 from automation.linkedin import LinkedInAutomation
 
 
@@ -9,10 +9,11 @@ class TestConnectionFiltering:
     @pytest.mark.asyncio
     async def test_filter_connected_profiles(self):
         """Test that connected profiles (Message button) are filtered out"""
-        # Create a mock LinkedInAutomation instance
-        li = LinkedInAutomation(email="test@example.com", password="password")
-        li.page = Mock()
-        li.debug = True
+        # Create a mock LinkedInAutomation instance without initializing browser
+        with patch('automation.linkedin.async_playwright'):
+            li = LinkedInAutomation(email="test@example.com", password="password")
+            li.page = Mock()
+            li.debug = True
         
         # Mock the page methods
         li.page.goto = AsyncMock()
