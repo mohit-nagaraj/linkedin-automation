@@ -216,7 +216,15 @@ class LinkedInAutomation:
                         connection_status = "unknown"
                         
                         if await button.count() > 0:
+                            # First try to get button text content
                             button_text = await button.text_content()
+                            
+                            # If no text, try to get the aria-label which often has the action
+                            if not button_text or button_text.strip() == "":
+                                button_aria_label = await button.get_attribute("aria-label")
+                                if button_aria_label:
+                                    button_text = button_aria_label
+                            
                             if button_text:
                                 button_text = button_text.strip().lower()
                                 
@@ -227,25 +235,31 @@ class LinkedInAutomation:
                                     continue
                                 
                                 # If button says "connect" or "follow", we're not connected - add to list
-                                elif "connect" in button_text or "follow" in button_text:
+                                elif "connect" in button_text or "follow" in button_text or "invite" in button_text:
                                     connection_status = "not_connected"
                                     if self.debug:
                                         logging.debug("Adding unconnected profile: %s (button: %s)", profile_url, button_text.title())
                                 else:
-                                    # Unknown button state, skip to be safe
+                                    # Unknown button state, check if it could be a connect button
+                                    # Sometimes buttons have generic text, so let's be less strict
                                     if self.debug:
-                                        logging.debug("Skipping profile with unknown button: %s (button: %s)", profile_url, button_text)
-                                    continue
+                                        logging.debug("Profile with unclear button: %s (button: %s), adding anyway", profile_url, button_text)
+                                    connection_status = "not_connected"  # Assume not connected if unclear
                             else:
-                                # No button text, skip to be safe
+                                # No button text even after checking aria-label
+                                # This might be a UI issue, let's add them anyway
                                 if self.debug:
-                                    logging.debug("Skipping profile with no button text: %s", profile_url)
-                                continue
+                                    logging.debug("Profile with no button text: %s, adding anyway", profile_url)
+                                connection_status = "not_connected"
                         else:
-                            # No button found, skip to be safe
+                            # No button found - this could mean various things
+                            # Let's add them anyway to be safe
                             if self.debug:
-                                logging.debug("Skipping profile with no button: %s", profile_url)
-                            continue
+                                logging.debug("Profile with no button found: %s, adding anyway", profile_url)
+                            connection_status = "unknown"
+                        
+                        # Only skip if we're certain they're connected (message button)
+                        # Otherwise, add to results
                         
                         # Add to results
                         search_results.append(SearchResult(
