@@ -15,7 +15,14 @@ class DummyLI:
         from automation.linkedin import SearchResult
         return [SearchResult(name="Jane", headline="CTO", location="Remote", profile_url="https://www.linkedin.com/in/jane")]
     async def search_people(self, keywords, locations, max_results=25):
-        return ["https://www.linkedin.com/in/jane"]
+        from automation.linkedin import SearchResult
+        return [SearchResult(
+            name="Jane",
+            headline="CTO at TechCo",
+            location="Remote",
+            profile_url="https://www.linkedin.com/in/jane",
+            connection_status="not_connected"
+        )]
     async def scrape_profile(self, url):
         from automation.linkedin import Profile
         return Profile(
@@ -35,8 +42,21 @@ class DummyLI:
 class DummySheets:
     def __init__(self):
         self.rows = []
+    
     def append_lead(self, row):
         self.rows.append(row)
+        return len(self.rows) + 1  # Return row number
+    
+    def find_row_by_url(self, url):
+        return None  # No existing row
+    
+    def update_row(self, row_num, updates):
+        pass
+    
+    def update_cell(self, row_num, col_name, value):
+        # Update the last column to track connection sent
+        if col_name == "Connect Sent" and self.rows:
+            self.rows[-1][-1] = value
 
 
 class DummyGemini:

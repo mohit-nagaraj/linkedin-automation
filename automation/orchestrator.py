@@ -155,9 +155,9 @@ async def run() -> None:
                     else:
                         position = profile.headline.split(",")[0] if "," in profile.headline else ""
                 
-                # Format experience, education, and skills for storage
-                experience_str = "\n".join([f"• {exp}" for exp in (profile.experience or [])])
-                education_str = "\n".join([f"• {edu}" for edu in (profile.education or [])])
+                # Format experience and skills for storage (education not available in current Profile)
+                experience_str = "\n".join([f"• {exp}" for exp in (profile.experiences or [])])
+                education_str = ""  # Education field not available in current profile structure
                 skills_str = ", ".join(profile.skills or [])
                 
                 updates = {

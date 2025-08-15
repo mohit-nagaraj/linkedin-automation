@@ -65,27 +65,42 @@ Implemented strict processing limits that:
 - Immediate Google Sheets updates
 - Break statement when limit is reached
 
-## Enhanced Google Sheets Integration (2024)
+## Enhanced Google Sheets Integration (2025)
 
 ### Problem
-Google Sheets structure needed better documentation and error handling.
+Google Sheets structure needed better documentation, duplicate detection, and comprehensive tracking fields.
 
 ### Solution
 Improved Google Sheets integration with:
-- **Clear Schema**: 8 well-defined columns
-- **Real-time Updates**: Each profile added immediately
+- **Expanded Schema**: 16 comprehensive columns for detailed tracking
+- **Duplicate Detection**: Checks existing URLs before adding new rows
+- **Smart Updates**: Updates existing profiles instead of creating duplicates
+- **Real-time Updates**: Each profile processed and updated immediately
 - **Error Handling**: Graceful handling of API failures
-- **Detailed Logging**: Comprehensive monitoring
+- **Detailed Logging**: Comprehensive monitoring with visibility
 
-### Schema
-1. **name**: Profile name
-2. **headline**: Job title/headline
-3. **location**: Location
-4. **profile_url**: LinkedIn profile URL
-5. **popularity_score**: Calculated popularity score (0-100)
-6. **summary**: AI-generated profile summary
-7. **note**: AI-generated connection note
-8. **connected**: "yes" or "no" (connection status)
+### Enhanced Schema
+1. **Name**: Profile name
+2. **Position**: Extracted position/title from headline
+3. **Headline**: Full job title/headline
+4. **Location**: Geographic location
+5. **Profile URL**: LinkedIn profile URL
+6. **Popularity Score**: Calculated popularity score (0-100)
+7. **Summary**: AI-generated profile summary
+8. **Connection Note**: Personalized AI-generated connection note
+9. **Connect Sent**: "yes" or "no" (whether connection request was sent)
+10. **Connection Status**: "connected", "not_connected", or "unknown"
+11. **Date Added**: Timestamp when profile was first added
+12. **Last Updated**: Timestamp of most recent update
+13. **About**: Full about section from profile
+14. **Experience**: List of experiences
+15. **Education**: List of education entries
+16. **Skills**: Comma-separated skills list
+
+### New Features
+- **find_row_by_url()**: Finds existing profile rows by URL
+- **update_row()**: Batch updates multiple columns efficiently
+- **Position Extraction**: Automatically extracts position from headline
 
 ## Robust Selector System (2024)
 
@@ -154,6 +169,29 @@ Implemented performance optimizations:
 - **Efficiency**: Better resource utilization
 - **Scalability**: Handles larger profile sets
 
+## Enhanced Connect Button Detection (2025)
+
+### Problem
+LinkedIn's Connect button has varying HTML structures and selectors, making it difficult to reliably find and click.
+
+### Solution
+Implemented multi-method detection system:
+- **Method 1**: aria-label selector for "Invite X to connect" buttons
+- **Method 2**: Button with span containing "Connect" text
+- **Method 3**: Role-based selector as fallback
+- **More Actions Dropdown**: Checks in dropdown if not visible
+
+### Features
+- **Test Mode**: Can fill note without sending (for testing)
+- **Better Note Handling**: Properly detects and fills note textarea
+- **Modal Management**: Handles connection popup properly
+- **Detailed Logging**: Logs which method found the button
+
+### Impact
+- **Higher Success Rate**: Multiple methods increase reliability
+- **Better Compatibility**: Works with different LinkedIn layouts
+- **Safer Testing**: Test mode prevents accidental connections
+
 ## Future Considerations
 
 ### Planned Improvements
@@ -161,9 +199,11 @@ Implemented performance optimizations:
 - **Retry Logic**: Automatic retry for failed connections
 - **Analytics**: Success rate tracking and reporting
 - **Configuration**: More flexible configuration options
+- **Connection Tracking**: Track acceptance rates over time
 
 ### Maintenance Notes
 - Monitor LinkedIn DOM changes regularly
 - Update selectors as needed
 - Review and adjust rate limiting settings
 - Keep dependencies updated
+- Test connect button detection regularly

@@ -26,7 +26,9 @@ def test_orchestrator_enables_logging(monkeypatch, capsys):
             return [SearchResult(name="n", headline="h", location="loc", profile_url="https://x/in/a")]
         async def search_people(self, k, l, max_results=25):
             logging.info("search_people called")
-            return ["https://x/in/a"]
+            from automation.linkedin import SearchResult
+            return [SearchResult(name="Test User", headline="Software Engineer", location="SF", 
+                               profile_url="https://x/in/a", connection_status="not_connected")]
         async def scrape_profile(self, url):
             from automation.linkedin import Profile
             return Profile("n","h","loc",url,"about",[],[],100)
@@ -37,6 +39,16 @@ def test_orchestrator_enables_logging(monkeypatch, capsys):
     class DummySheets:
         def append_lead(self, row):
             logging.info("sheet append")
+            return 2  # Return row number
+        
+        def find_row_by_url(self, url):
+            return None  # No existing row
+        
+        def update_row(self, row_num, updates):
+            pass
+        
+        def update_cell(self, row_num, col_name, value):
+            pass
 
     class DummyGemini:
         async def summarize_profile(self, p, b):

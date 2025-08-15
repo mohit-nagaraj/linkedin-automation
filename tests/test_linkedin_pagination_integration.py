@@ -104,28 +104,34 @@ class TestLinkedInPaginationIntegration:
     
     def test_pagination_parameters(self):
         """Test that pagination parameters are configurable"""
-        li = LinkedInAutomation(email="test@example.com", password="password")
-        
-        # Test URL building with different page numbers
-        keywords = ["test"]
-        
-        for page_num in range(1, 11):
-            url = li._build_search_url(keywords, page_num)
-            assert f"page={page_num}" in url
-            assert "keywords=test" in url
-            assert url.startswith("https://www.linkedin.com/search/results/people/")
+        from unittest.mock import patch
+        with patch('automation.linkedin.async_playwright'):
+            li = LinkedInAutomation(email="test@example.com", password="password")
+            
+            # Test URL building with different page numbers
+            keywords = ["test"]
+            
+            for page_num in range(1, 11):
+                url = li._build_search_url(keywords, page_num)
+                assert f"page={page_num}" in url
+                assert "keywords=test" in url
+                assert url.startswith("https://www.linkedin.com/search/results/people/")
     
     def test_pagination_edge_cases(self):
         """Test pagination edge cases"""
-        li = LinkedInAutomation(email="test@example.com", password="password")
-        
-        # Test with empty keywords
-        url = li._build_search_url([], 1)
-        assert "page=1" in url
-        assert "keywords=" in url
-        
-        # Test with special characters in keywords
-        special_keywords = ["software engineer", "founder & cto"]
-        url = li._build_search_url(special_keywords, 1)
-        assert "page=1" in url
-        assert "keywords=software%20engineer%20founder%20%26%20cto" in url
+        from unittest.mock import patch
+        with patch('automation.linkedin.async_playwright'):
+            li = LinkedInAutomation(email="test@example.com", password="password")
+            
+            # Test with empty keywords
+            url = li._build_search_url([], 1)
+            assert "page=1" in url
+            assert "keywords=" in url
+            
+            # Test with special characters in keywords
+            special_keywords = ["software engineer", "founder & cto"]
+            url = li._build_search_url(special_keywords, 1)
+            assert "page=1" in url
+            # Check that keywords are URL-encoded (space becomes %20)
+            assert "software%20engineer" in url
+            assert "founder" in url

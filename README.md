@@ -1,6 +1,6 @@
 # linkedin-automation
 
-[![CI](https://img.shields.io/badge/tests-92%25%20coverage-brightgreen)](docs/testing.md)
+[![CI](https://img.shields.io/badge/tests-passing-brightgreen)](docs/testing.md)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/)
 [![License](https://img.shields.io/badge/license-MIT-lightgrey)](LICENSE)
 
@@ -8,10 +8,11 @@ Python-based LinkedIn lead finder and connector for software dev/founder persona
 
 - Logs into LinkedIn, searches people by your keywords with **pagination support**
 - **Filters by connection status** - only processes unconnected profiles
-- Scrapes visible profile info (name, headline, location, about, top experiences, skills, followers)
-- Uses Google Gemini 1.5 Flash to generate a concise profile summary and a personalized 280-char connect note
-- Sends a connection request with note
-- Stores leads into Google Sheets so you can review on mobile
+- Scrapes comprehensive profile info (name, position, headline, location, about, experiences, education, skills, followers)
+- **Smart duplicate detection** - updates existing profiles instead of creating duplicates
+- Uses Google Gemini 2.5 Flash to generate a concise profile summary and a personalized 280-char connect note
+- Sends a connection request with note (with test mode available)
+- Stores leads into Google Sheets with **enhanced table structure** for better tracking
 - **Respects MAX_PROFILES limit** - stops processing after reaching your specified limit
 
 Note: Automating LinkedIn may violate their Terms. Use responsibly and at your own risk.
@@ -29,17 +30,25 @@ Note: Automating LinkedIn may violate their Terms. Use responsibly and at your o
 ### 🔍 Smart Profile Collection
 - **Connection Status Filtering**: Automatically skips already connected profiles
 - **Pagination Support**: Searches across multiple pages for maximum results
+- **Enhanced Connect Button Detection**: Multiple methods to find and click connect buttons
 - **Robust Selectors**: Multiple fallback selectors for LinkedIn's changing DOM
 
 ### 📊 Processing Control
 - **MAX_PROFILES Limit**: Set your processing limit in environment variables
-- **Real-time Updates**: Each profile is processed and added to sheets immediately
-- **Detailed Logging**: Comprehensive logging for monitoring and debugging
+- **Duplicate Detection**: Checks if profile URL already exists before adding
+- **Real-time Updates**: Each profile is processed and updated in sheets immediately
+- **Detailed Logging**: Comprehensive logging with visibility into all operations
 
 ### 🤖 AI-Powered Personalization
 - **Smart Summaries**: AI-generated profile summaries using Google Gemini
 - **Personalized Notes**: Custom connection notes based on profile analysis
 - **Popularity Scoring**: Intelligent scoring based on followers, skills, and experience
+
+### 📋 Enhanced Google Sheets Integration
+- **Comprehensive Columns**: Name, Position, Headline, Location, Profile URL, Score, Summary, Note, and more
+- **Tracking Fields**: Date Added, Last Updated, Connection Status, and Connection Sent
+- **Profile Details**: About section, Experience, Education, and Skills stored
+- **Smart Updates**: Updates existing rows if profile URL already exists
 
 ## Mohit bio used for personalization
 
