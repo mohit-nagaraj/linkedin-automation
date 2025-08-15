@@ -187,7 +187,7 @@ class LinkedInAutomation:
                     # Process each search result container
                     for result_container in result_containers:
                         # Find the profile link within this container
-                        profile_link = await result_container.locator("a[href*='/in/']").first
+                        profile_link = result_container.locator("a[href*='/in/']").first
                         if await profile_link.count() == 0:
                             continue
                         
@@ -205,14 +205,14 @@ class LinkedInAutomation:
                         
                         # Extract name from the profile link or nearby text
                         name = ""
-                        name_elem = await result_container.locator("span[aria-hidden='true']").first
+                        name_elem = result_container.locator("span[aria-hidden='true']").first
                         if await name_elem.count() > 0:
                             name_text = await name_elem.text_content()
                             if name_text:
                                 name = name_text.strip()
                         
                         # Find the button in the same container to check connection status
-                        button = await result_container.locator("button").first
+                        button = result_container.locator("button").first
                         connection_status = "unknown"
                         
                         if await button.count() > 0:
