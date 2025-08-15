@@ -33,16 +33,27 @@ async def run() -> None:
         raise RuntimeError("Set SEARCH_KEYWORDS env var (comma-separated).")
 
     sheets: SheetsClient | None = None
-    if settings.gsheet_name:
-        sheets = SheetsClient(
-            json_path=settings.gcp_service_account_json_path,
-            json_blob=settings.gcp_service_account_json,
-            spreadsheet_name=settings.gsheet_name,
-            worksheet_name=settings.gsheet_worksheet,
-            oauth_client_secrets_path=settings.oauth_client_secrets_path,
-            oauth_token_path=settings.oauth_token_path,
-            spreadsheet_id=settings.gsheet_id,
-        )
+    if settings.gsheet_name or settings.gsheet_id:
+        logging.info("Initializing Google Sheets client...")
+        logging.debug("GSHEET_NAME: %s", settings.gsheet_name)
+        logging.debug("GSHEET_ID: %s", settings.gsheet_id)
+        logging.debug("GCP_SERVICE_ACCOUNT_JSON_PATH: %s", settings.gcp_service_account_json_path)
+        try:
+            sheets = SheetsClient(
+                json_path=settings.gcp_service_account_json_path,
+                json_blob=settings.gcp_service_account_json,
+                spreadsheet_name=settings.gsheet_name,
+                worksheet_name=settings.gsheet_worksheet,
+                oauth_client_secrets_path=settings.oauth_client_secrets_path,
+                oauth_token_path=settings.oauth_token_path,
+                spreadsheet_id=settings.gsheet_id,
+            )
+            logging.info("Google Sheets client initialized successfully")
+        except Exception as e:
+            logging.error("Failed to initialize Google Sheets client: %s", str(e))
+            sheets = None
+    else:
+        logging.warning("Google Sheets not configured - GSHEET_NAME or GSHEET_ID not set")
 
     gemini = GeminiClient(api_key=settings.google_api_key, model_name="gemini-1.5-flash")
 
