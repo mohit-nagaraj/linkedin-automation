@@ -23,6 +23,14 @@ class Profile:
     followers_count: Optional[int]
 
 
+@dataclass
+class SearchResult:
+    name: str
+    headline: Optional[str]
+    location: Optional[str]
+    profile_url: str
+
+
 class LinkedInAutomation:
     def __init__(self, email: str, password: str, headless: bool = False, slow_mo_ms: int = 0, navigation_timeout_ms: int = 30000, storage_state_path: str | None = None, use_persistent_context: bool = True, user_data_dir: str | None = None, browser_channel: str | None = None, debug: bool = False, min_action_delay_ms: int = 0, max_action_delay_ms: int = 0):
         self.email = email
@@ -152,6 +160,86 @@ class LinkedInAutomation:
         if self.debug:
             logging.info("Collected %d profile URLs", len(profile_urls[:max_results]))
         return profile_urls[:max_results]
+
+    def _build_search_url(self, keywords: List[str], page_number: int) -> str:
+        # Use a single keywords string, spaces become %20
+        joined = "%20".join([k.strip().replace(" ", "%20") for k in keywords if k.strip()])
+        base = f"https://www.linkedin.com/search/results/people/?keywords={joined}&page={page_number}"
+        return base
+
+    async def search_people_listings(self, keywords: List[str], locations: List[str], max_results: int = 25) -> List[SearchResult]:
+        assert self.page is not None
+        results: List[SearchResult] = []
+        page_number = 1
+        stagnant_rounds = 0
+        while len(results) < max_results:
+            url = self._build_search_url(keywords, page_number)
+            if self.debug:
+                logging.info("Loading search page %d", page_number)
+            await self.page.goto(url, wait_until="domcontentloaded")
+            await self._human_pause()
+            item_loc = self.page.locator("li.reusable-search__result-container")
+            count = await item_loc.count()
+            if count == 0:
+                # Try a simpler anchor selection as fallback
+                cards = await self.page.locator("a.app-aware-link[href*='/in/']").all()
+                if len(cards) == 0:
+                    if self.debug:
+                        logging.info("No results on page %d; stopping.", page_number)
+                    break
+                # Convert anchors to results
+                for card in cards:
+                    href = await card.get_attribute("href")
+                    if not href:
+                        continue
+                    profile_url = href.split("?")[0]
+                    name_text = await card.text_content()
+                    sr = SearchResult(name=(name_text or '').strip(), headline=None, location=None, profile_url=profile_url)
+                    results.append(sr)
+                    if len(results) >= max_results:
+                        break
+            else:
+                start_len = len(results)
+                for i in range(count):
+                    item = item_loc.nth(i)
+                    link = item.locator("a.app-aware-link[href*='/in/']").first
+                    href = await link.get_attribute("href") if await link.count() > 0 else None
+                    if not href:
+                        continue
+                    profile_url = href.split("?")[0]
+                    # Try extracting name
+                    name_el = item.locator("span[aria-hidden=true]").first
+                    name_text = (await name_el.text_content()) if await name_el.count() > 0 else None
+                    # Headline and location candidates
+                    headline_el = item.locator("div.entity-result__primary-subtitle").first
+                    if await headline_el.count() == 0:
+                        headline_el = item.locator("div.entity-result__secondary-subtitle").first
+                    headline_text = (await headline_el.text_content()) if await headline_el.count() > 0 else None
+                    location_el = item.locator("div.entity-result__secondary-subtitle").nth(1)
+                    location_text = (await location_el.text_content()) if await location_el.count() > 0 else None
+                    sr = SearchResult(
+                        name=(name_text or '').strip(),
+                        headline=(headline_text or '').strip() if headline_text else None,
+                        location=(location_text or '').strip() if location_text else None,
+                        profile_url=profile_url,
+                    )
+                    results.append(sr)
+                    if len(results) >= max_results:
+                        break
+                new_count = len(results) - start_len
+                if new_count == 0:
+                    stagnant_rounds += 1
+                else:
+                    stagnant_rounds = 0
+                logging.info("Search page %d: +%d new, total %d", page_number, new_count, len(results))
+            if len(results) >= max_results:
+                break
+            if stagnant_rounds >= 2:
+                if self.debug:
+                    logging.info("No new results after %d pages; stopping.", stagnant_rounds)
+                break
+            page_number += 1
+        return results[:max_results]
 
     async def scrape_profile(self, profile_url: str) -> Profile:
         assert self.page is not None
