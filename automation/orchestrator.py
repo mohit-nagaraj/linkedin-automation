@@ -72,31 +72,49 @@ async def run() -> None:
         for url in profile_urls:
             logging.info("Processing profile %d/%d: %s", processed_count + 1, settings.max_profiles, url)
             
+            # Step 1: Scrape profile
             profile = await li.scrape_profile(url)
             popularity = compute_popularity_score(profile, settings.seniority_keywords)
+            
+            # Step 2: Immediately add basic info to sheet
+            row_num = None
+            if sheets:
+                initial_row_data = [
+                    profile.name,
+                    profile.headline,
+                    profile.location or "",
+                    profile.profile_url,
+                    popularity,
+                    "",  # summary (to be filled later)
+                    "",  # note (to be filled later)
+                    "pending",  # connection status
+                ]
+                row_num = sheets.append_lead(initial_row_data)
+                logging.info("Added basic info to Google Sheets row %d: %s", row_num, profile.name)
+            
+            # Step 3: Generate summary asynchronously and update sheet
             summary = await gemini.summarize_profile(profile, OWNER_BIO)
+            if sheets and row_num:
+                sheets.update_cell(row_num, "summary", summary)
+                logging.debug("Updated summary for row %d", row_num)
+            
+            # Step 4: Generate connection note and update sheet
             note = await gemini.craft_connect_note(profile, OWNER_BIO)
+            if sheets and row_num:
+                sheets.update_cell(row_num, "note", note)
+                logging.debug("Updated note for row %d", row_num)
 
+            # Step 5: Try to connect and update status
             connected = False
             try:
                 connected = await li.connect_with_note(url, note)
             except Exception as e:
                 logging.warning("Failed to connect with %s: %s", url, str(e))
                 connected = False
-
-            if sheets:
-                row_data = [
-                    profile.name,
-                    profile.headline,
-                    profile.location or "",
-                    profile.profile_url,
-                    popularity,
-                    summary,
-                    note,
-                    "yes" if connected else "no",
-                ]
-                sheets.append_lead(row_data)
-                logging.info("Added to Google Sheets: %s (%s)", profile.name, "Connected" if connected else "Not Connected")
+            
+            if sheets and row_num:
+                sheets.update_cell(row_num, "connected", "yes" if connected else "no")
+                logging.info("Updated connection status for %s: %s", profile.name, "Connected" if connected else "Not Connected")
             
             processed_count += 1
             

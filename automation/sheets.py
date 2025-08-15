@@ -85,8 +85,59 @@ class SheetsClient:
                 "connected",
             ])
 
-    def append_lead(self, row: List[Any]) -> None:
+    def append_lead(self, row: List[Any]) -> int:
+        """Append a lead to the sheet and return the row number."""
         logging.debug("Appending lead to sheet: %s", row[:4])
         self.worksheet.append_row(row, value_input_option="RAW")
+        # Return the row number (1-indexed, header is row 1)
+        return len(self.worksheet.get_all_values())
+    
+    def update_row(self, row_num: int, column_updates: Dict[str, Any]) -> None:
+        """Update specific columns in a row.
+        
+        Args:
+            row_num: The row number to update (1-indexed)
+            column_updates: Dictionary mapping column names to new values
+        """
+        # Get header row to find column indices
+        headers = self.worksheet.row_values(1)
+        
+        # Build list of updates (cell address, value)
+        updates = []
+        for col_name, value in column_updates.items():
+            if col_name in headers:
+                col_idx = headers.index(col_name) + 1  # 1-indexed
+                # Convert column index to letter(s) (A, B, ..., Z, AA, AB, ...)
+                cell_address = self._col_num_to_letter(col_idx) + str(row_num)
+                updates.append((cell_address, value))
+        
+        # Batch update all cells
+        if updates:
+            # Use batch_update for better performance
+            batch_data = []
+            for cell_addr, val in updates:
+                batch_data.append({'range': cell_addr, 'values': [[val]]})
+            if batch_data:
+                self.worksheet.batch_update(batch_data, value_input_option="RAW")
+            logging.debug("Updated row %d with %d values", row_num, len(updates))
+    
+    def _col_num_to_letter(self, col_num: int) -> str:
+        """Convert a column number (1-indexed) to letter(s)."""
+        result = ""
+        while col_num > 0:
+            col_num -= 1
+            result = chr(65 + col_num % 26) + result
+            col_num //= 26
+        return result
+    
+    def update_cell(self, row_num: int, col_name: str, value: Any) -> None:
+        """Update a single cell in the sheet.
+        
+        Args:
+            row_num: The row number to update (1-indexed)
+            col_name: The column name
+            value: The new value
+        """
+        self.update_row(row_num, {col_name: value})
 
 
