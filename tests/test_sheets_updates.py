@@ -53,7 +53,9 @@ class TestSheetsUpdates:
         
         # Should return row 3 (after header and existing row)
         assert row_num == 2
-        mock_worksheet.append_row.assert_called_once_with(row_data, value_input_option="RAW")
+        # append_lead pads to 16 columns
+        padded_row = row_data + [''] * (16 - len(row_data))
+        mock_worksheet.append_row.assert_called_once_with(padded_row, value_input_option="RAW")
 
     @patch('automation.sheets._service_account_creds')
     def test_update_cell(self, mock_creds, mock_gspread):

@@ -79,6 +79,57 @@ class SheetsClient:
                 self.spreadsheet = client.create(spreadsheet_name)
         try:
             self.worksheet = self.spreadsheet.worksheet(worksheet_name)
+            # Check if worksheet exists but is empty or has incomplete headers
+            all_values = self.worksheet.get_all_values()
+            expected_headers = [
+                "Name", "Position", "Headline", "Location", "Profile URL", 
+                "Popularity Score", "Summary", "Connection Note", "Connect Sent",
+                "Connection Status", "Date Added", "Last Updated", "About",
+                "Experience", "Education", "Skills"
+            ]
+            
+            needs_headers = False
+            if not all_values:
+                # Sheet is completely empty
+                needs_headers = True
+                logging.info("Worksheet is empty, adding headers")
+            elif len(all_values[0]) < len(expected_headers):
+                # Headers exist but are incomplete
+                needs_headers = True  
+                logging.info("Worksheet has incomplete headers (%d columns), replacing with full headers (%d columns)", 
+                           len(all_values[0]), len(expected_headers))
+            elif all_values[0][:5] != expected_headers[:5]:
+                # First 5 headers don't match expected
+                needs_headers = True
+                logging.info("Worksheet headers don't match expected format, replacing")
+                
+            if needs_headers:
+                # Clear the first row and add proper headers
+                if all_values:
+                    # Delete the first row if it exists
+                    logging.info("Deleting existing incomplete header row")
+                    self.worksheet.delete_rows(1)
+                # Insert headers at the top
+                logging.info("Inserting proper headers at row 1")
+                self.worksheet.insert_row([
+                    "Name",
+                    "Position",
+                    "Headline",
+                    "Location",
+                    "Profile URL",
+                    "Popularity Score",
+                    "Summary",
+                    "Connection Note",
+                    "Connect Sent",
+                    "Connection Status",
+                    "Date Added",
+                    "Last Updated",
+                    "About",
+                    "Experience",
+                    "Education",
+                    "Skills",
+                ], index=1)
+                logging.info("Headers added successfully")
         except gspread.exceptions.WorksheetNotFound:
             self.worksheet = self.spreadsheet.add_worksheet(title=worksheet_name, rows=1000, cols=20)
             self.worksheet.append_row([
@@ -102,7 +153,11 @@ class SheetsClient:
 
     def append_lead(self, row: List[Any]) -> int:
         """Append a lead to the sheet and return the row number."""
-        logging.debug("Appending lead to sheet: %s", row[:4])
+        logging.debug("Appending lead to sheet: %d columns, first 4: %s", len(row), row[:4])
+        # Ensure we have all 16 columns, fill missing ones with empty strings
+        expected_columns = 16
+        if len(row) < expected_columns:
+            row = row + [''] * (expected_columns - len(row))
         self.worksheet.append_row(row, value_input_option="RAW")
         # Return the row number (1-indexed, header is row 1)
         return len(self.worksheet.get_all_values())

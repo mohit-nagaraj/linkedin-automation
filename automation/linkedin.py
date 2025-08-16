@@ -33,7 +33,7 @@ class SearchResult:
 
 
 class LinkedInAutomation:
-    def __init__(self, email: str, password: str, headless: bool = False, slow_mo_ms: int = 0, navigation_timeout_ms: int = 30000, storage_state_path: str | None = None, use_persistent_context: bool = True, user_data_dir: str | None = None, browser_channel: str | None = None, debug: bool = False, min_action_delay_ms: int = 0, max_action_delay_ms: int = 0):
+    def __init__(self, email: str, password: str, headless: bool = False, slow_mo_ms: int = 0, navigation_timeout_ms: int = 30000, storage_state_path: str | None = None, use_persistent_context: bool = True, user_data_dir: str | None = None, browser_channel: str | None = None, debug: bool = False, min_action_delay_ms: int = 0, max_action_delay_ms: int = 0, test_mode: bool = True):
         self.email = email
         self.password = password
         self.headless = headless
@@ -46,6 +46,7 @@ class LinkedInAutomation:
         self.debug = debug
         self.min_action_delay_ms = min_action_delay_ms
         self.max_action_delay_ms = max_action_delay_ms
+        self.test_mode = test_mode
         self.browser: Optional[Browser] = None
         self.page: Optional[Page] = None
 
@@ -520,57 +521,113 @@ class LinkedInAutomation:
         
         await asyncio.sleep(2)  # Wait for modal to appear
         
-        # Check for Add a Note button
+        # The modal asks "Add a note to your invitation?" with two buttons:
+        # "Add a note" and "Send without a note"
+        # We need to click "Add a note" first
         add_note_btn = None
         try:
+            # Try multiple selectors for the "Add a note" button
             add_note_btn = await self.page.wait_for_selector(
-                'button:has-text("Add a note")',
-                timeout=3000
+                'button[aria-label="Add a note"]',
+                timeout=5000
             )
+            logging.info("Found 'Add a note' button using aria-label")
         except:
-            add_note_btn = self.page.get_by_role("button", name="Add a note").first
+            try:
+                add_note_btn = await self.page.wait_for_selector(
+                    'button:has-text("Add a note")',
+                    timeout=3000
+                )
+                logging.info("Found 'Add a note' button using text selector")
+            except:
+                # Try role-based selector
+                add_note_btn = self.page.get_by_role("button", name="Add a note").first
+                if await add_note_btn.count() > 0:
+                    logging.info("Found 'Add a note' button using role selector")
         
         if not add_note_btn or (hasattr(add_note_btn, 'count') and await add_note_btn.count() == 0):
-            logging.warning("Add a note button not found")
-            return False
+            logging.warning("'Add a note' button not found in modal")
+            # Try to send without note if we can't find the add note button
+            try:
+                send_without_note = await self.page.wait_for_selector(
+                    'button:has-text("Send without a note")',
+                    timeout=3000
+                )
+                logging.info("Sending without note as fallback")
+                await send_without_note.click()
+                return True
+            except:
+                return False
         
-        # Click Add a Note
+        # Click "Add a note" button
         if hasattr(add_note_btn, 'click'):
             await add_note_btn.click()
         else:
             await add_note_btn.first.click()
         
+        logging.info("Clicked 'Add a note' button, waiting for textarea")
         await asyncio.sleep(1)
         
+        # Now the textarea should appear in the same modal
         # Fill in the note
         try:
-            textarea = await self.page.wait_for_selector('textarea[name="message"]', timeout=3000)
-            await textarea.fill(note[:280])
-            logging.info("Filled connection note: %s", note[:50] + "...")
-        except:
-            logging.warning("Could not find message textarea")
+            # Try different selectors for the textarea
+            textarea = None
+            try:
+                textarea = await self.page.wait_for_selector('textarea[name="message"]', timeout=3000)
+            except:
+                try:
+                    textarea = await self.page.wait_for_selector('textarea#custom-message', timeout=2000)
+                except:
+                    textarea = await self.page.wait_for_selector('textarea', timeout=2000)
+            
+            if textarea:
+                await textarea.fill(note[:300])  # LinkedIn allows up to 300 chars
+                logging.info("Filled connection note: %s", note[:50] + "...")
+            else:
+                logging.warning("Could not find message textarea")
+                return False
+        except Exception as e:
+            logging.warning("Could not fill message textarea: %s", str(e))
             return False
         
-        # FOR TESTING: Don't actually send the connection request
-        logging.info("TEST MODE: Not sending connection request. Would have sent with note: %s", note[:100] + "...")
+        await asyncio.sleep(1)
         
-        # Close the modal instead of sending
-        try:
-            cancel_btn = self.page.get_by_role("button", name="Cancel").first
-            if await cancel_btn.count() > 0:
-                await cancel_btn.click()
-                logging.info("Closed connection modal (test mode)")
-        except:
-            # Try pressing Escape
-            await self.page.keyboard.press("Escape")
-        
-        # In production, uncomment these lines:
-        # send_btn = self.page.get_by_role("button", name="Send").first
-        # if await send_btn.count() == 0:
-        #     return False
-        # await send_btn.click()
-        # if self.debug:
-        #     logging.info("Connection request sent")
+        # Use test_mode from instance configuration
+        if self.test_mode:
+            logging.info("TEST MODE: Not sending connection request. Would have sent with note: %s", note[:100] + "...")
+            # Close the modal instead of sending
+            try:
+                cancel_btn = self.page.get_by_role("button", name="Cancel").first
+                if await cancel_btn.count() > 0:
+                    await cancel_btn.click()
+                    logging.info("Closed connection modal (test mode)")
+                else:
+                    await self.page.keyboard.press("Escape")
+            except:
+                await self.page.keyboard.press("Escape")
+        else:
+            # Actually send the connection request
+            try:
+                # After filling the note, the "Send" button should be available
+                send_btn = await self.page.wait_for_selector(
+                    'button:has-text("Send")',
+                    timeout=3000
+                )
+                await send_btn.click()
+                logging.info("Connection request sent with note")
+                return True
+            except:
+                try:
+                    # Alternative selector
+                    send_btn = self.page.get_by_role("button", name="Send").first
+                    if await send_btn.count() > 0:
+                        await send_btn.click()
+                        logging.info("Connection request sent with note")
+                        return True
+                except:
+                    logging.error("Could not find Send button")
+                    return False
         
         return True  # Return True for testing purposes
 

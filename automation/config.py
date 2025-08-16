@@ -38,6 +38,7 @@ class Settings:
     debug: bool = False
     min_action_delay_ms: int = 0
     max_action_delay_ms: int = 0
+    test_mode: bool = True  # When True, doesn't actually send connection requests
 
 
 def get_env_list(name: str) -> List[str]:
@@ -80,6 +81,7 @@ def load_settings() -> Settings:
         debug=os.getenv("DEBUG", "false").lower() in {"1", "true", "yes"},
         min_action_delay_ms=int(os.getenv("MIN_ACTION_DELAY_MS", "0")),
         max_action_delay_ms=int(os.getenv("MAX_ACTION_DELAY_MS", "0")),
+        test_mode=os.getenv("TEST_MODE", "true").lower() in {"1", "true", "yes"},
     )
 
 

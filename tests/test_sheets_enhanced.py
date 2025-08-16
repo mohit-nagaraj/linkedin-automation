@@ -33,6 +33,21 @@ class MockWorksheet:
     def batch_update(self, batch_data, value_input_option=None):
         """Mock batch update."""
         pass
+    
+    def delete_rows(self, row_num):
+        """Delete a row from the worksheet (1-indexed)."""
+        all_values = self.get_all_values()
+        if row_num == 1 and self.headers:
+            self.headers = []
+        elif row_num > 1 and row_num <= len(all_values):
+            self.data.pop(row_num - 2)  # -2 because data is 0-indexed and skips header
+    
+    def insert_row(self, row, index=1):
+        """Insert a row at the given index (1-indexed)."""
+        if index == 1:
+            self.headers = row
+        else:
+            self.data.insert(index - 2, row)  # -2 because data is 0-indexed and skips header
 
 
 class MockSpreadsheet:
@@ -58,11 +73,18 @@ def test_find_row_by_url(monkeypatch):
     mock_spreadsheet = MockSpreadsheet()
     mock_worksheet = MockWorksheet()
     
-    # Add test data
-    mock_worksheet.headers = ["Name", "Position", "Headline", "Location", "Profile URL"]
+    # Add test data with complete headers
+    mock_worksheet.headers = [
+        "Name", "Position", "Headline", "Location", "Profile URL", 
+        "Popularity Score", "Summary", "Connection Note", "Connect Sent",
+        "Connection Status", "Date Added", "Last Updated", "About",
+        "Experience", "Education", "Skills"
+    ]
     mock_worksheet.data = [
-        ["John Doe", "Engineer", "Software Engineer", "SF", "https://linkedin.com/in/johndoe"],
-        ["Jane Smith", "Manager", "Product Manager", "NYC", "https://linkedin.com/in/janesmith"],
+        ["John Doe", "Engineer", "Software Engineer", "SF", "https://linkedin.com/in/johndoe",
+         "0", "", "", "no", "not_connected", "", "", "", "", "", ""],
+        ["Jane Smith", "Manager", "Product Manager", "NYC", "https://linkedin.com/in/janesmith",
+         "0", "", "", "no", "not_connected", "", "", "", "", "", ""],
     ]
     
     mock_spreadsheet.worksheets["Leads"] = mock_worksheet
@@ -101,10 +123,16 @@ def test_update_row(monkeypatch):
     mock_spreadsheet = MockSpreadsheet()
     mock_worksheet = MockWorksheet()
     
-    # Add test data
-    mock_worksheet.headers = ["Name", "Position", "Score", "Status"]
+    # Add test data with complete headers
+    mock_worksheet.headers = [
+        "Name", "Position", "Headline", "Location", "Profile URL", 
+        "Popularity Score", "Summary", "Connection Note", "Connect Sent",
+        "Connection Status", "Date Added", "Last Updated", "About",
+        "Experience", "Education", "Skills"
+    ]
     mock_worksheet.data = [
-        ["John Doe", "Engineer", "0", "pending"],
+        ["John Doe", "Engineer", "Software Engineer", "SF", "https://linkedin.com/in/johndoe",
+         "0", "", "", "pending", "not_connected", "", "", "", "", "", ""],
     ]
     
     # Mock batch_update to track calls
@@ -132,8 +160,8 @@ def test_update_row(monkeypatch):
     
     # Test updating multiple columns
     sc.update_row(2, {
-        "Score": "85",
-        "Status": "completed"
+        "Popularity Score": "85",
+        "Connection Status": "completed"
     })
     
     # Verify batch update was called with correct data
@@ -143,10 +171,10 @@ def test_update_row(monkeypatch):
     
     # Check that correct cells are being updated
     cell_updates = {item['range']: item['values'][0][0] for item in batch_data}
-    assert 'C2' in cell_updates  # Score column (C) row 2
-    assert 'D2' in cell_updates  # Status column (D) row 2
-    assert cell_updates['C2'] == "85"
-    assert cell_updates['D2'] == "completed"
+    assert 'F2' in cell_updates  # Popularity Score column (F) row 2
+    assert 'J2' in cell_updates  # Connection Status column (J) row 2
+    assert cell_updates['F2'] == "85"
+    assert cell_updates['J2'] == "completed"
 
 
 def test_column_number_to_letter():

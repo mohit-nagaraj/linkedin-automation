@@ -15,11 +15,30 @@ import logging
 
 
 OWNER_BIO = (
-    "Mohit Nagaraj is a Computer Science and Engineering student (CGPA 9.23) with strong expertise in "
-    "JavaScript, TypeScript, Go, and Dart, alongside frameworks and tools like React, Next.js, Node.js, "
-    "PostgreSQL, MongoDB, Flutter, Redis, and AWS. He has developed projects like Solace, VidStreamX, "
-    "TrendAi, and Exsense. Professionally, he worked at Boho/SellerSetu and Springreen (APIs, microservices, CI/CD). "
-    "Hackathon winner and OSS contributor (KubeVirt)."
+    "Mohit Nagaraj is a Software Engineer at Final Round AI (Founding Engineer) and active member at Point Blank, "
+    "with 6 hackathon wins including the Grand Prize (₹1.25 Lakh) at Innerve 9.0, India's largest student-driven "
+    "hackathon, competing against 1,250 teams. Currently pursuing B.E. in Computer Science at Dayananda Sagar "
+    "College of Engineering, Bangalore (CGPA 9.2, graduating 2026).\n\n"
+    
+    "At Final Round AI, he architects event-driven chargeback automation systems using FastAPI microservices, "
+    "integrating Stripe webhooks, Firebase, and LiteLLM for AI-powered dispute analysis with automated PDF "
+    "evidence generation via Weasyprint and S3 storage. He builds asynchronous workflow orchestration with "
+    "APScheduler for email polling (IMAP/SMTP), real-time Slack notifications, and maintains 85%+ test coverage.\n\n"
+    
+    "Technical expertise spans Python backends, React Native apps, Go microservices, Kubernetes deployments, "
+    "Docker containers, and cloud infrastructure (AWS Certified Cloud Practitioner). Notable projects include "
+    "VidStreamX (scalable video transcoding pipeline with AWS S3/SQS), TrendAI (AI-powered social media analytics), "
+    "and Synapse (AI-driven EdTech platform that won Innerve 9).\n\n"
+    
+    "Professional experience includes React Native Developer at Boho (expo framework, SDUI, tanstack queries, "
+    "websockets), SDE intern at Springreen (microservices, CI/CD pipelines, EC2 instances), and DevOps intern "
+    "at Finessefleet Foundation (Kubernetes, Prometheus/Grafana monitoring stack, infrastructure-as-code).\n\n"
+    
+    "Open source contributor to CNCF KubeVirt project, focusing on virtualization and Kubernetes CRDs. "
+    "Skills include Next.js, Express.js, Full-Stack Development, Kubernetes, FastAPI, Go, Docker, AWS, "
+    "Firebase, PostgreSQL, MongoDB, Redis, and comprehensive testing frameworks.\n\n"
+    
+    "Portfolio: mohitnagaraj.in | GitHub: github.com/mohit-nagaraj | Based in Bengaluru, Karnataka, India"
 )
 
 
@@ -71,6 +90,7 @@ async def run() -> None:
         debug=settings.debug,
         min_action_delay_ms=settings.min_action_delay_ms,
         max_action_delay_ms=settings.max_action_delay_ms,
+        test_mode=settings.test_mode,
     ) as li:
         logging.info("Starting LinkedIn login")
         await li.login()
