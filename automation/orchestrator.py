@@ -8,8 +8,11 @@ from dotenv import load_dotenv
 from .config import load_settings
 from .linkedin import LinkedInAutomation
 from .gemini_client import GeminiClient
+from .enhanced_gemini_client import EnhancedGeminiClient
 from .scoring import compute_popularity_score
 from .sheets import SheetsClient
+from .enhanced_sheets import EnhancedSheetsClient
+from .profile_extractor import ProfileExtractor, DetailedProfile
 from .logging_config import configure_logging
 import logging
 
@@ -52,14 +55,19 @@ async def run() -> None:
     if not settings.search_keywords:
         raise RuntimeError("Set SEARCH_KEYWORDS env var (comma-separated).")
 
-    sheets: SheetsClient | None = None
+    # Try enhanced sheets first, fallback to regular sheets
+    sheets = None
+    enhanced_sheets: EnhancedSheetsClient | None = None
+    
     if settings.gsheet_name or settings.gsheet_id:
         logging.info("Initializing Google Sheets client...")
         logging.debug("GSHEET_NAME: %s", settings.gsheet_name)
         logging.debug("GSHEET_ID: %s", settings.gsheet_id)
         logging.debug("GCP_SERVICE_ACCOUNT_JSON_PATH: %s", settings.gcp_service_account_json_path)
+        
+        # Try enhanced sheets first
         try:
-            sheets = SheetsClient(
+            enhanced_sheets = EnhancedSheetsClient(
                 json_path=settings.gcp_service_account_json_path,
                 json_blob=settings.gcp_service_account_json,
                 spreadsheet_name=settings.gsheet_name,
@@ -68,14 +76,34 @@ async def run() -> None:
                 oauth_token_path=settings.oauth_token_path,
                 spreadsheet_id=settings.gsheet_id,
             )
-            logging.info("Google Sheets client initialized successfully")
+            logging.info("Enhanced Google Sheets client initialized successfully")
         except Exception as e:
-            logging.error("Failed to initialize Google Sheets client: %s", str(e))
-            sheets = None
+            logging.warning("Failed to initialize Enhanced Sheets, falling back to regular: %s", str(e))
+            # Fallback to regular sheets
+            try:
+                sheets = SheetsClient(
+                    json_path=settings.gcp_service_account_json_path,
+                    json_blob=settings.gcp_service_account_json,
+                    spreadsheet_name=settings.gsheet_name,
+                    worksheet_name=settings.gsheet_worksheet,
+                    oauth_client_secrets_path=settings.oauth_client_secrets_path,
+                    oauth_token_path=settings.oauth_token_path,
+                    spreadsheet_id=settings.gsheet_id,
+                )
+                logging.info("Regular Google Sheets client initialized successfully")
+            except Exception as e:
+                logging.error("Failed to initialize any Google Sheets client: %s", str(e))
     else:
         logging.warning("Google Sheets not configured - GSHEET_NAME or GSHEET_ID not set")
 
+    # Initialize Gemini clients
     gemini = GeminiClient(api_key=settings.google_api_key, model_name="gemini-2.5-flash-preview-05-20")
+    enhanced_gemini = None
+    try:
+        enhanced_gemini = EnhancedGeminiClient(api_key=settings.google_api_key, model_name="gemini-2.0-flash-exp")
+        logging.info("Enhanced Gemini client initialized")
+    except Exception as e:
+        logging.warning("Failed to initialize Enhanced Gemini client: %s", str(e))
 
     async with LinkedInAutomation(
         email=settings.linkedin_email,
@@ -97,10 +125,18 @@ async def run() -> None:
         logging.info("Login step complete. Proceeding to people search.")
         search_results = await li.search_people(settings.search_keywords, settings.locations, max_results=settings.max_profiles)
         logging.info("Found %d profiles", len(search_results))
+        
+        # Initialize profile extractor
+        profile_extractor = ProfileExtractor(li.page, debug=settings.debug)
 
         # Step 1: Save all search results to Google Sheets first
         row_mapping = {}  # Map profile URLs to row numbers
-        if sheets:
+        
+        # Use enhanced sheets if available
+        if enhanced_sheets:
+            logging.info("Using enhanced sheets for comprehensive profile data...")
+            sheets = None  # Don't use regular sheets
+        elif sheets:
             logging.info("Saving search results to Google Sheets...")
             for idx, result in enumerate(search_results, 1):
                 # Check if profile already exists
@@ -155,16 +191,70 @@ async def run() -> None:
         
         for result in search_results:
             url = result.profile_url
-            row_num = row_mapping.get(url) if sheets else None
+            row_num = row_mapping.get(url) if (sheets or enhanced_sheets) else None
             
             logging.info("Processing profile %d/%d: %s", processed_count + 1, settings.max_profiles, url)
             
-            # Scrape full profile details
-            profile = await li.scrape_profile(url)
-            popularity = compute_popularity_score(profile, settings.seniority_keywords)
+            # Use enhanced extraction if available
+            if enhanced_sheets and enhanced_gemini:
+                try:
+                    # Extract detailed profile
+                    detailed_profile = await profile_extractor.extract_profile(url)
+                    
+                    # Generate AI content
+                    logging.info("Generating AI content for %s", detailed_profile.name)
+                    
+                    # Generate InMail note
+                    inmail_note = await enhanced_gemini.generate_inmail_note(detailed_profile, OWNER_BIO)
+                    detailed_profile.inmail_note = inmail_note
+                    
+                    # Generate ice breaker questions
+                    ice_breakers = await enhanced_gemini.generate_ice_breakers(detailed_profile, count=3)
+                    detailed_profile.ice_breakers = ice_breakers
+                    
+                    # Generate AI summary that focuses on the target person
+                    ai_summary = await enhanced_gemini.summarize_profile(detailed_profile, OWNER_BIO)
+                    
+                    # Calculate popularity score
+                    popularity = compute_popularity_score(detailed_profile, settings.seniority_keywords)
+                    
+                    # Add to enhanced sheets
+                    row_num = enhanced_sheets.add_profile(
+                        detailed_profile,
+                        ai_summary=ai_summary,
+                        popularity_score=popularity
+                    )
+                    logging.info("Added enhanced profile data for %s with %d skills, %d experiences, %d ice breakers",
+                                detailed_profile.name, len(detailed_profile.skills), 
+                                len(detailed_profile.experiences), len(detailed_profile.ice_breakers))
+                    
+                    # Try to connect
+                    if result.connection_status != "connected":
+                        try:
+                            connect_sent = await li.connect_with_note(url, inmail_note)
+                            if connect_sent:
+                                logging.info("Connection request sent to %s", detailed_profile.name)
+                                enhanced_sheets.mark_connect_sent(row_num)
+                            else:
+                                logging.info("Could not send connection to %s", detailed_profile.name)
+                        except Exception as e:
+                            logging.warning("Failed to connect with %s: %s", detailed_profile.name, str(e))
+                    else:
+                        logging.info("%s is already connected", detailed_profile.name)
+                        enhanced_sheets.mark_connection_accepted(row_num)
+                    
+                except Exception as e:
+                    logging.error("Enhanced extraction failed for %s: %s. Falling back to regular.", url, str(e))
+                    # Fall back to regular extraction
+                    profile = await li.scrape_profile(url)
+                    popularity = compute_popularity_score(profile, settings.seniority_keywords)
+            else:
+                # Regular extraction (fallback)
+                profile = await li.scrape_profile(url)
+                popularity = compute_popularity_score(profile, settings.seniority_keywords)
             
-            # Update the row with scraped profile data
-            if sheets and row_num:
+            # Update the row with scraped profile data (only for regular sheets)
+            if sheets and row_num and not enhanced_sheets:
                 # Extract position from headline if available
                 position = ""
                 if profile.headline:
@@ -198,40 +288,41 @@ async def run() -> None:
                 sheets.update_row(row_num, updates)
                 logging.debug("Updated profile data for row %d: %s", row_num, profile.name)
             
-            # Generate summary and update
-            summary = await gemini.summarize_profile(profile, OWNER_BIO)
-            if sheets and row_num:
-                sheets.update_cell(row_num, "Summary", summary)
-                logging.info("Updated summary for row %d: %s", row_num, summary[:100] + "..." if len(summary) > 100 else summary)
-            
-            # Generate connection note and update
-            note = await gemini.craft_connect_note(profile, OWNER_BIO)
-            if sheets and row_num:
-                sheets.update_cell(row_num, "Connection Note", note)
-                logging.info("Updated connection note for row %d: %s", row_num, note[:100] + "..." if len(note) > 100 else note)
-
-            # Try to connect (only if not already connected)
-            if result.connection_status != "connected":
-                connect_sent = False
-                try:
-                    connect_sent = await li.connect_with_note(url, note)
-                    if connect_sent:
-                        logging.info("Successfully sent connection request to %s", profile.name)
-                    else:
-                        logging.info("Could not send connection request to %s (button not found or already pending)", profile.name)
-                except Exception as e:
-                    logging.warning("Failed to send connection request to %s: %s", profile.name, str(e))
-                    connect_sent = False
+            # Generate summary and update (only for regular sheets, not enhanced)
+            if not enhanced_sheets:
+                summary = await gemini.summarize_profile(profile, OWNER_BIO)
+                if sheets and row_num:
+                    sheets.update_cell(row_num, "Summary", summary)
+                    logging.info("Updated summary for row %d: %s", row_num, summary[:100] + "..." if len(summary) > 100 else summary)
                 
+                # Generate connection note and update
+                note = await gemini.craft_connect_note(profile, OWNER_BIO)
                 if sheets and row_num:
-                    sheets.update_cell(row_num, "Connect Sent", "yes" if connect_sent else "no")
-                    logging.info("Updated Connect Sent status for %s: %s", profile.name, "yes" if connect_sent else "no")
-            else:
-                logging.info("Skipping connection for %s (already connected)", profile.name)
-                if sheets and row_num:
-                    # Mark as already connected (connection was sent in the past and accepted)
-                    sheets.update_cell(row_num, "Connect Sent", "yes")
-                    sheets.update_cell(row_num, "Connection Status", "connected")
+                    sheets.update_cell(row_num, "Connection Note", note)
+                    logging.info("Updated connection note for row %d: %s", row_num, note[:100] + "..." if len(note) > 100 else note)
+
+                # Try to connect (only if not already connected)
+                if result.connection_status != "connected":
+                    connect_sent = False
+                    try:
+                        connect_sent = await li.connect_with_note(url, note)
+                        if connect_sent:
+                            logging.info("Successfully sent connection request to %s", profile.name)
+                        else:
+                            logging.info("Could not send connection request to %s (button not found or already pending)", profile.name)
+                    except Exception as e:
+                        logging.warning("Failed to send connection request to %s: %s", profile.name, str(e))
+                        connect_sent = False
+                    
+                    if sheets and row_num:
+                        sheets.update_cell(row_num, "Connect Sent", "yes" if connect_sent else "no")
+                        logging.info("Updated Connect Sent status for %s: %s", profile.name, "yes" if connect_sent else "no")
+                else:
+                    logging.info("Skipping connection for %s (already connected)", profile.name)
+                    if sheets and row_num:
+                        # Mark as already connected (connection was sent in the past and accepted)
+                        sheets.update_cell(row_num, "Connect Sent", "yes")
+                        sheets.update_cell(row_num, "Connection Status", "connected")
             
             processed_count += 1
             
@@ -243,6 +334,10 @@ async def run() -> None:
                 break
         
         logging.info("Finished processing %d profiles", processed_count)
+        if enhanced_sheets:
+            logging.info("Enhanced data saved with ice breaker questions and comprehensive profiles")
+        elif sheets:
+            logging.info("Regular data saved to Google Sheets")
 
 
 def main() -> None:

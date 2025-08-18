@@ -127,50 +127,145 @@ class ProfileExtractor:
             return None
     
     async def _extract_about(self) -> Optional[str]:
-        """Extract about section"""
+        """Extract about section from profile"""
         try:
+            # Try multiple selectors for the About section
+            selectors = [
+                "section#about div.display-flex.full-width span[aria-hidden='true']",
+                "section:has(#about) div.inline-show-more-text span[aria-hidden='true']",
+                "section:has(h2:has-text('About')) div.inline-show-more-text span[aria-hidden='true']",
+                "div.pv-about__summary-text span[aria-hidden='true']",
+                "section#about span[aria-hidden='true']"
+            ]
+            
+            for selector in selectors:
+                about_elem = self.page.locator(selector).first
+                if await about_elem.count() > 0:
+                    about_text = await about_elem.text_content()
+                    if about_text and len(about_text) > 20:  # Ensure it's meaningful text
+                        return about_text.strip()
+            
+            # Fallback: Try to get the entire about section content
             about_section = self.page.locator("section:has(#about)")
             if await about_section.count() > 0:
+                # Get all text from the about section
                 about_text = await about_section.locator("div.display-flex.full-width").first.text_content()
                 if about_text:
-                    return about_text.strip()
-        except Exception:
-            pass
+                    # Clean up the text
+                    cleaned = about_text.strip()
+                    # Remove "see more" type text
+                    if "see more" in cleaned.lower():
+                        cleaned = cleaned[:cleaned.lower().index("see more")]
+                    if len(cleaned) > 20:
+                        return cleaned
+        except Exception as e:
+            if self.debug:
+                logging.warning(f"Failed to extract about section: {e}")
         return None
     
     async def _extract_experiences(self) -> List[Dict[str, Any]]:
         """Extract detailed work experience"""
         experiences = []
         try:
-            exp_section = self.page.locator("section:has(#experience)")
-            if await exp_section.count() > 0:
+            # Try multiple selectors for experience section
+            exp_selectors = [
+                "section:has(#experience)",
+                "section:has(h2:has-text('Experience'))",
+                "section#experience"
+            ]
+            
+            exp_section = None
+            for selector in exp_selectors:
+                exp_section = self.page.locator(selector)
+                if await exp_section.count() > 0:
+                    break
+            
+            if exp_section and await exp_section.count() > 0:
                 exp_items = await exp_section.locator("li.artdeco-list__item").all()
                 
                 for item in exp_items:
                     try:
-                        # Extract title, company, duration, description
-                        title_elem = item.locator("div.display-flex.align-items-center span[aria-hidden='true']").first
-                        company_elem = item.locator("span.t-14.t-normal span[aria-hidden='true']").first
+                        # Multiple selectors for title
+                        title = ""
+                        title_selectors = [
+                            "div.display-flex.align-items-center span[aria-hidden='true']",
+                            "div.mr1.t-bold span[aria-hidden='true']",
+                            "div.display-flex span[aria-hidden='true']"
+                        ]
+                        for selector in title_selectors:
+                            title_elem = item.locator(selector).first
+                            if await title_elem.count() > 0:
+                                title_text = await title_elem.text_content()
+                                if title_text and len(title_text) > 2:
+                                    title = title_text.strip()
+                                    break
+                        
+                        # Multiple selectors for company
+                        company = ""
+                        company_selectors = [
+                            "span.t-14.t-normal span[aria-hidden='true']",
+                            "span:has-text('·')",
+                            "span.t-14 span[aria-hidden='true']"
+                        ]
+                        for selector in company_selectors:
+                            company_elem = item.locator(selector).first
+                            if await company_elem.count() > 0:
+                                company_text = await company_elem.text_content()
+                                if company_text:
+                                    # Extract company name from text like "Company · Full-time"
+                                    if " · " in company_text:
+                                        company = company_text.split(" · ")[0].strip()
+                                    else:
+                                        company = company_text.strip()
+                                    if company:
+                                        break
+                        
+                        # Duration
+                        duration = ""
                         duration_elem = item.locator("span.t-14.t-normal.t-black--light span[aria-hidden='true']").first
-                        desc_elem = item.locator("div.display-flex.full-width").last
+                        if await duration_elem.count() > 0:
+                            duration_text = await duration_elem.text_content()
+                            if duration_text:
+                                duration = duration_text.strip()
+                        
+                        # Description
+                        description = ""
+                        desc_selectors = [
+                            "div.inline-show-more-text span[aria-hidden='true']",
+                            "div.display-flex.full-width span[aria-hidden='true']"
+                        ]
+                        for selector in desc_selectors:
+                            desc_elem = item.locator(selector).last
+                            if await desc_elem.count() > 0:
+                                desc_text = await desc_elem.text_content()
+                                if desc_text and len(desc_text) > 10:
+                                    description = desc_text.strip()
+                                    break
+                        
+                        # Skills
+                        skills = []
+                        skills_elem = item.locator("strong:has-text('skills')")
+                        if await skills_elem.count() > 0:
+                            parent = skills_elem.locator("..")
+                            skills_text = await parent.text_content()
+                            if skills_text:
+                                # Remove "and +X skills" part
+                                skills_text = skills_text.split(" and +")[0] if " and +" in skills_text else skills_text
+                                skill_parts = skills_text.replace("skills", "").split(",")
+                                skills = [s.strip() for s in skill_parts if s.strip() and len(s.strip()) > 2]
                         
                         exp_data = {
-                            "title": await title_elem.text_content() if await title_elem.count() > 0 else "",
-                            "company": await company_elem.text_content() if await company_elem.count() > 0 else "",
-                            "duration": await duration_elem.text_content() if await duration_elem.count() > 0 else "",
-                            "description": await desc_elem.text_content() if await desc_elem.count() > 0 else "",
-                            "skills": []
+                            "title": title,
+                            "company": company,
+                            "duration": duration,
+                            "description": description,
+                            "skills": skills
                         }
                         
-                        # Extract skills associated with this experience
-                        skills_elem = item.locator("strong")
-                        if await skills_elem.count() > 0:
-                            skills_text = await skills_elem.text_content()
-                            if skills_text and "skills" in skills_text.lower():
-                                exp_data["skills"] = [s.strip() for s in skills_text.split(",")]
-                        
-                        if exp_data["title"] or exp_data["company"]:
+                        if title or company:
                             experiences.append(exp_data)
+                            if self.debug:
+                                logging.debug(f"Extracted experience: {title} at {company}")
                     except Exception as e:
                         if self.debug:
                             logging.warning(f"Failed to extract experience item: {e}")
@@ -185,27 +280,46 @@ class ProfileExtractor:
         """Extract all skills from profile"""
         skills = []
         try:
-            # Try main skills section
-            skill_section = self.page.locator("section:has(#skills)")
-            if await skill_section.count() > 0:
-                skill_items = await skill_section.locator("div.mr1.hoverable-link-text.t-bold span[aria-hidden='true']").all()
+            # Try main skills section with multiple selectors
+            skill_selectors = [
+                "section:has(#skills) div.mr1.hoverable-link-text.t-bold span[aria-hidden='true']",
+                "section:has(h2:has-text('Skills')) div.mr1.hoverable-link-text span[aria-hidden='true']",
+                "section#skills span[aria-hidden='true']",
+                "div[data-field='skill_card_skill_topic'] span[aria-hidden='true']"
+            ]
+            
+            for selector in skill_selectors:
+                skill_items = await self.page.locator(selector).all()
                 for item in skill_items:
                     text = await item.text_content()
-                    if text and text.strip():
+                    if text and text.strip() and not any(word in text.lower() for word in ['experience', 'followers', 'skill']):
                         skills.append(text.strip())
             
-            # Also extract skills from experience sections
-            exp_skills = await self.page.locator("div strong:has-text('skills')").all()
-            for skill_elem in exp_skills:
-                parent = skill_elem.locator("..")
-                text = await parent.text_content()
-                if text:
-                    # Parse skills from text like "Internal Audits, Support Services and +3 skills"
-                    skill_parts = text.split(",")
-                    for part in skill_parts:
-                        clean_skill = part.strip()
-                        if clean_skill and not clean_skill.startswith("+") and "skill" not in clean_skill.lower():
-                            skills.append(clean_skill)
+            # Extract skills from experience sections
+            exp_skill_selectors = [
+                "div strong:has-text('skills')",
+                "strong:text-matches('.*skills.*', 'i')"
+            ]
+            
+            for selector in exp_skill_selectors:
+                exp_skills = await self.page.locator(selector).all()
+                for skill_elem in exp_skills:
+                    parent = skill_elem.locator("..")
+                    text = await parent.text_content()
+                    if text:
+                        # Parse skills from text like "Internal Audits, Support Services and +3 skills"
+                        # Remove the "and +X skills" part
+                        text = text.split(" and +")[0] if " and +" in text else text
+                        skill_parts = text.replace("skills", "").split(",")
+                        for part in skill_parts:
+                            clean_skill = part.strip()
+                            # Filter out non-skill text
+                            if (clean_skill and 
+                                len(clean_skill) > 2 and 
+                                not clean_skill.startswith("+") and 
+                                "skill" not in clean_skill.lower() and
+                                clean_skill[0].isupper()):
+                                skills.append(clean_skill)
         except Exception as e:
             if self.debug:
                 logging.warning(f"Failed to extract skills: {e}")
@@ -250,28 +364,78 @@ class ProfileExtractor:
         """Extract education information"""
         education = []
         try:
-            edu_section = self.page.locator("section:has(#education)")
-            if await edu_section.count() > 0:
+            # Try multiple selectors for education section
+            edu_selectors = [
+                "section:has(#education)",
+                "section:has(h2:has-text('Education'))",
+                "section#education"
+            ]
+            
+            edu_section = None
+            for selector in edu_selectors:
+                edu_section = self.page.locator(selector)
+                if await edu_section.count() > 0:
+                    break
+            
+            if edu_section and await edu_section.count() > 0:
                 edu_items = await edu_section.locator("li.artdeco-list__item").all()
                 
                 for item in edu_items:
                     try:
-                        school_elem = item.locator("div.mr1.hoverable-link-text.t-bold span[aria-hidden='true']").first
-                        degree_elem = item.locator("span.t-14.t-normal span[aria-hidden='true']").first
+                        # School name
+                        school = ""
+                        school_selectors = [
+                            "div.mr1.hoverable-link-text.t-bold span[aria-hidden='true']",
+                            "div.mr1.t-bold span[aria-hidden='true']",
+                            "div.display-flex span[aria-hidden='true']"
+                        ]
+                        for selector in school_selectors:
+                            school_elem = item.locator(selector).first
+                            if await school_elem.count() > 0:
+                                school_text = await school_elem.text_content()
+                                if school_text and len(school_text) > 2:
+                                    school = school_text.strip()
+                                    break
+                        
+                        # Degree/Field of study
+                        degree = ""
+                        degree_selectors = [
+                            "span.t-14.t-normal span[aria-hidden='true']",
+                            "span.t-14 span[aria-hidden='true']"
+                        ]
+                        for selector in degree_selectors:
+                            degree_elem = item.locator(selector).first
+                            if await degree_elem.count() > 0:
+                                degree_text = await degree_elem.text_content()
+                                if degree_text and degree_text != school:
+                                    degree = degree_text.strip()
+                                    break
+                        
+                        # Duration
+                        duration = ""
                         duration_elem = item.locator("span.t-14.t-normal.t-black--light span[aria-hidden='true']").first
+                        if await duration_elem.count() > 0:
+                            duration_text = await duration_elem.text_content()
+                            if duration_text:
+                                duration = duration_text.strip()
                         
                         edu_data = {
-                            "school": await school_elem.text_content() if await school_elem.count() > 0 else "",
-                            "degree": await degree_elem.text_content() if await degree_elem.count() > 0 else "",
-                            "duration": await duration_elem.text_content() if await duration_elem.count() > 0 else ""
+                            "school": school,
+                            "degree": degree,
+                            "duration": duration
                         }
                         
-                        if edu_data["school"]:
+                        if school:
                             education.append(edu_data)
-                    except Exception:
+                            if self.debug:
+                                logging.debug(f"Extracted education: {degree} from {school}")
+                    except Exception as e:
+                        if self.debug:
+                            logging.warning(f"Failed to extract education item: {e}")
                         continue
-        except Exception:
-            pass
+        except Exception as e:
+            if self.debug:
+                logging.warning(f"Failed to extract education: {e}")
         
         return education
     
