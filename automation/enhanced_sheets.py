@@ -185,18 +185,72 @@ class EnhancedSheetsClient:
         except Exception as e:
             logging.warning(f"Could not format headers: {e}")
     
+    def find_profile_by_url(self, profile_url: str) -> Optional[int]:
+        """Find a profile by URL and return its row number"""
+        try:
+            # Get all values to search for the profile URL
+            all_values = self.worksheet.get_all_values()
+            headers = all_values[0] if all_values else []
+            
+            # Find the profile_url column index
+            if "profile_url" in headers:
+                url_col_idx = headers.index("profile_url")
+                
+                # Search for the profile URL in all rows
+                for row_idx, row in enumerate(all_values[1:], start=2):  # Start from row 2 (skip header)
+                    if row_idx <= len(all_values) and url_col_idx < len(row):
+                        if row[url_col_idx] == profile_url:
+                            return row_idx
+            return None
+        except Exception as e:
+            logging.warning(f"Error finding profile by URL: {e}")
+            return None
+    
     def add_profile(self, profile: DetailedProfile, ai_summary: str = "", 
                    popularity_score: float = 0.0) -> int:
-        """Add a comprehensive profile to the sheet"""
+        """Add a comprehensive profile to the sheet, or update if it already exists"""
         
-        # Prepare row data matching column order
-        row_data = self._profile_to_row(profile, ai_summary, popularity_score)
+        # Check if profile already exists
+        existing_row = self.find_profile_by_url(profile.profile_url)
         
-        logging.debug(f"Adding profile to sheet: {profile.name}")
-        self.worksheet.append_row(row_data, value_input_option="RAW")
-        
-        # Return the row number
-        return len(self.worksheet.get_all_values())
+        if existing_row:
+            logging.info(f"Profile already exists for {profile.name} at row {existing_row}, updating instead")
+            # Update the existing row with new data
+            row_data = self._profile_to_row(profile, ai_summary, popularity_score)
+            
+            # Update the entire row except for status columns
+            headers = self.worksheet.row_values(1)
+            
+            # Preserve status columns if they exist
+            status_columns = ["connect_sent", "connect_sent_date", "connection_accepted", 
+                            "message_sent", "response_received", "notes"]
+            
+            # Get current status values
+            current_row = self.worksheet.row_values(existing_row)
+            
+            # Preserve status column values
+            for col_name in status_columns:
+                if col_name in headers:
+                    col_idx = headers.index(col_name)
+                    if col_idx < len(current_row) and col_idx < len(row_data):
+                        # Keep existing value if it's not empty
+                        if current_row[col_idx]:
+                            row_data[col_idx] = current_row[col_idx]
+            
+            # Update the row
+            cell_range = f"A{existing_row}:{self._col_num_to_letter(len(row_data))}{existing_row}"
+            self.worksheet.update(cell_range, [row_data], value_input_option="RAW")
+            
+            return existing_row
+        else:
+            # Prepare row data matching column order
+            row_data = self._profile_to_row(profile, ai_summary, popularity_score)
+            
+            logging.debug(f"Adding new profile to sheet: {profile.name}")
+            self.worksheet.append_row(row_data, value_input_option="RAW")
+            
+            # Return the row number
+            return len(self.worksheet.get_all_values())
     
     def _profile_to_row(self, profile: DetailedProfile, ai_summary: str, 
                         popularity_score: float) -> List[Any]:

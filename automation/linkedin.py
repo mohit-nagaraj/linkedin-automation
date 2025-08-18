@@ -6,6 +6,7 @@ import asyncio
 import random
 import time
 import logging
+import re
 
 from playwright.async_api import async_playwright, Browser, Page
 import os
@@ -474,16 +475,17 @@ class LinkedInAutomation:
         await self.page.wait_for_load_state("domcontentloaded")
         await asyncio.sleep(2)  # Wait for page to fully load
 
-        # Try multiple selectors for Connect button
+        # Try to find Connect button - check multiple locations and scenarios
         connect_button = None
         
-        # Method 1: Try button with aria-label containing "Invite" and "to connect"
+        # Method 1: Try direct Connect button with aria-label containing "Invite" and "to connect"
         try:
             connect_button = await self.page.wait_for_selector(
                 'button[aria-label*="Invite"][aria-label*="to connect"]',
                 timeout=3000
             )
-            logging.info("Found connect button using aria-label selector")
+            if self.debug:
+                logging.info("Found direct connect button using aria-label selector")
         except:
             pass
         
@@ -494,96 +496,203 @@ class LinkedInAutomation:
                     'button:has(span.artdeco-button__text:text("Connect"))',
                     timeout=3000
                 )
-                logging.info("Found connect button using span text selector")
+                if self.debug:
+                    logging.info("Found direct connect button using span text selector")
             except:
                 pass
         
-        # Method 3: Try role-based selector
+        # Method 3: Try role-based selector for direct connect button
         if not connect_button:
-            connect_button = self.page.get_by_role("button", name="Connect").first
-            if await connect_button.count() == 0:
-                # Fallback: Check in More actions dropdown
-                more_btn = self.page.get_by_role("button", name="More").first
-                if await more_btn.count() > 0:
-                    await more_btn.click()
-                    await asyncio.sleep(1)
-                    connect_button = self.page.get_by_role("button", name="Connect").first
+            connect_candidates = await self.page.get_by_role("button", name=re.compile(r"Connect", re.IGNORECASE)).all()
+            for candidate in connect_candidates:
+                if await candidate.is_visible():
+                    connect_button = candidate
+                    if self.debug:
+                        logging.info("Found direct connect button using role selector")
+                    break
         
-        if not connect_button or (hasattr(connect_button, 'count') and await connect_button.count() == 0):
+        # Method 4: Check if Connect button is hidden in "More" dropdown menu
+        if not connect_button:
+            if self.debug:
+                logging.info("Direct connect button not found, checking More dropdown")
+            
+            # Look for profile overflow action button (More button)
+            more_button_selectors = [
+                'button[id*="profile-overflow-action"]',  # Your specific case
+                'button[aria-label*="More actions"]',
+                'button:has-text("More")',
+                'button[data-control-name="overflow_menu"]'
+            ]
+            
+            more_button = None
+            for selector in more_button_selectors:
+                try:
+                    more_button = await self.page.wait_for_selector(selector, timeout=2000)
+                    if more_button and await more_button.is_visible():
+                        if self.debug:
+                            logging.info("Found More button using selector: %s", selector)
+                        break
+                except:
+                    continue
+            
+            if more_button:
+                # Click the More button to open dropdown
+                await more_button.click()
+                await asyncio.sleep(1.5)  # Wait for dropdown to appear
+                
+                # Now look for Connect button in the dropdown
+                dropdown_connect_selectors = [
+                    'button[aria-label*="Invite"][aria-label*="to connect"]',  # Your specific case
+                    'div[role="menu"] button:has-text("Connect")',
+                    'ul[role="menu"] button:has-text("Connect")',
+                    'div.artdeco-dropdown__content button:has-text("Connect")',
+                    'button:has(span:text("Connect"))'
+                ]
+                
+                for selector in dropdown_connect_selectors:
+                    try:
+                        connect_button = await self.page.wait_for_selector(selector, timeout=2000)
+                        if connect_button and await connect_button.is_visible():
+                            if self.debug:
+                                logging.info("Found connect button in dropdown using selector: %s", selector)
+                            break
+                    except:
+                        continue
+                
+                # Also try looking for specific element IDs like ember77 mentioned in your case
+                if not connect_button:
+                    try:
+                        # Look for any button with ID starting with "ember" that might be a connect button
+                        ember_buttons = await self.page.locator('button[id^="ember"]').all()
+                        for ember_btn in ember_buttons:
+                            aria_label = await ember_btn.get_attribute("aria-label")
+                            if aria_label and "connect" in aria_label.lower():
+                                connect_button = ember_btn
+                                if self.debug:
+                                    logging.info("Found connect button using ember ID with aria-label: %s", aria_label)
+                                break
+                    except:
+                        pass
+            else:
+                if self.debug:
+                    logging.warning("More button not found")
+        
+        if not connect_button:
             logging.warning("Connect button not found on profile: %s", profile_url)
             return False
 
         # Click Connect button
-        if hasattr(connect_button, 'click'):
+        try:
             await connect_button.click()
-        else:
-            await connect_button.first.click()
+            if self.debug:
+                logging.info("Clicked connect button successfully")
+        except Exception as e:
+            logging.error("Failed to click connect button: %s", str(e))
+            return False
         
         await asyncio.sleep(2)  # Wait for modal to appear
         
-        # The modal asks "Add a note to your invitation?" with two buttons:
-        # "Add a note" and "Send without a note"
-        # We need to click "Add a note" first
+        # Handle the connection modal - look for "Add a note" button
         add_note_btn = None
-        try:
-            # Try multiple selectors for the "Add a note" button
-            add_note_btn = await self.page.wait_for_selector(
-                'button[aria-label="Add a note"]',
-                timeout=5000
-            )
-            logging.info("Found 'Add a note' button using aria-label")
-        except:
-            try:
-                add_note_btn = await self.page.wait_for_selector(
-                    'button:has-text("Add a note")',
-                    timeout=3000
-                )
-                logging.info("Found 'Add a note' button using text selector")
-            except:
-                # Try role-based selector
-                add_note_btn = self.page.get_by_role("button", name="Add a note").first
-                if await add_note_btn.count() > 0:
-                    logging.info("Found 'Add a note' button using role selector")
         
-        if not add_note_btn or (hasattr(add_note_btn, 'count') and await add_note_btn.count() == 0):
+        # Enhanced selectors for "Add a note" button
+        add_note_selectors = [
+            'button[aria-label="Add a note"]',
+            'button[aria-label*="Add a note"]',
+            'button:has-text("Add a note")',
+            'button:has(span:text("Add a note"))',
+            'button.artdeco-button--secondary:has-text("Add a note")'
+        ]
+        
+        for selector in add_note_selectors:
+            try:
+                add_note_btn = await self.page.wait_for_selector(selector, timeout=3000)
+                if add_note_btn and await add_note_btn.is_visible():
+                    if self.debug:
+                        logging.info("Found 'Add a note' button using selector: %s", selector)
+                    break
+            except:
+                continue
+        
+        # If still not found, try role-based selector
+        if not add_note_btn:
+            try:
+                add_note_candidates = await self.page.get_by_role("button", name=re.compile(r"Add.*note", re.IGNORECASE)).all()
+                for candidate in add_note_candidates:
+                    if await candidate.is_visible():
+                        add_note_btn = candidate
+                        if self.debug:
+                            logging.info("Found 'Add a note' button using role selector")
+                        break
+            except:
+                pass
+        
+        if not add_note_btn:
             logging.warning("'Add a note' button not found in modal")
             # Try to send without note if we can't find the add note button
             try:
-                send_without_note = await self.page.wait_for_selector(
+                send_without_note_selectors = [
                     'button:has-text("Send without a note")',
-                    timeout=3000
-                )
-                logging.info("Sending without note as fallback")
-                await send_without_note.click()
-                return True
-            except:
+                    'button[aria-label*="Send without a note"]',
+                    'button.artdeco-button--primary:has-text("Send")'
+                ]
+                
+                send_without_note = None
+                for selector in send_without_note_selectors:
+                    try:
+                        send_without_note = await self.page.wait_for_selector(selector, timeout=2000)
+                        if send_without_note and await send_without_note.is_visible():
+                            break
+                    except:
+                        continue
+                
+                if send_without_note:
+                    logging.info("Sending without note as fallback")
+                    await send_without_note.click()
+                    return True
+                else:
+                    return False
+            except Exception as e:
+                logging.error("Failed to send without note: %s", str(e))
                 return False
         
         # Click "Add a note" button
-        if hasattr(add_note_btn, 'click'):
-            await add_note_btn.click()
-        else:
-            await add_note_btn.first.click()
-        
-        logging.info("Clicked 'Add a note' button, waiting for textarea")
-        await asyncio.sleep(1)
-        
-        # Now the textarea should appear in the same modal
-        # Fill in the note
         try:
-            # Try different selectors for the textarea
+            await add_note_btn.click()
+            if self.debug:
+                logging.info("Clicked 'Add a note' button, waiting for textarea")
+        except Exception as e:
+            logging.error("Failed to click 'Add a note' button: %s", str(e))
+            return False
+        
+        await asyncio.sleep(1.5)  # Wait for textarea to appear
+        
+        # Fill in the note - enhanced textarea detection
+        try:
             textarea = None
-            try:
-                textarea = await self.page.wait_for_selector('textarea[name="message"]', timeout=3000)
-            except:
+            textarea_selectors = [
+                'textarea[name="message"]',
+                'textarea#custom-message', 
+                'textarea[placeholder*="note"]',
+                'textarea[placeholder*="message"]',
+                'div[role="dialog"] textarea',
+                'textarea'  # Fallback to any textarea
+            ]
+            
+            for selector in textarea_selectors:
                 try:
-                    textarea = await self.page.wait_for_selector('textarea#custom-message', timeout=2000)
+                    textarea = await self.page.wait_for_selector(selector, timeout=2000)
+                    if textarea and await textarea.is_visible():
+                        if self.debug:
+                            logging.info("Found textarea using selector: %s", selector)
+                        break
                 except:
-                    textarea = await self.page.wait_for_selector('textarea', timeout=2000)
+                    continue
             
             if textarea:
                 await textarea.fill(note[:300])  # LinkedIn allows up to 300 chars
-                logging.info("Filled connection note: %s", note[:50] + "...")
+                if self.debug:
+                    logging.info("Filled connection note: %s", note[:50] + "...")
             else:
                 logging.warning("Could not find message textarea")
                 return False
@@ -609,25 +718,40 @@ class LinkedInAutomation:
         else:
             # Actually send the connection request
             try:
-                # After filling the note, the "Send" button should be available
-                send_btn = await self.page.wait_for_selector(
+                # Enhanced Send button detection
+                send_btn = None
+                send_selectors = [
                     'button:has-text("Send")',
-                    timeout=3000
-                )
-                await send_btn.click()
-                logging.info("Connection request sent with note")
-                return True
-            except:
-                try:
-                    # Alternative selector
+                    'button[aria-label*="Send"]',
+                    'button.artdeco-button--primary:has-text("Send")',
+                    'div[role="dialog"] button:has-text("Send")'
+                ]
+                
+                for selector in send_selectors:
+                    try:
+                        send_btn = await self.page.wait_for_selector(selector, timeout=2000)
+                        if send_btn and await send_btn.is_visible():
+                            break
+                    except:
+                        continue
+                
+                if send_btn:
+                    await send_btn.click()
+                    logging.info("Connection request sent with note")
+                    return True
+                else:
+                    # Try role-based selector as final fallback
                     send_btn = self.page.get_by_role("button", name="Send").first
                     if await send_btn.count() > 0:
                         await send_btn.click()
                         logging.info("Connection request sent with note")
                         return True
-                except:
-                    logging.error("Could not find Send button")
-                    return False
+                    else:
+                        logging.error("Could not find Send button")
+                        return False
+            except Exception as e:
+                logging.error("Failed to send connection request: %s", str(e))
+                return False
         
         return True  # Return True for testing purposes
 
