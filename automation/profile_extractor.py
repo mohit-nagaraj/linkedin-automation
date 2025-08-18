@@ -16,6 +16,7 @@ class DetailedProfile:
     location: Optional[str] = None
     profile_url: str = ""
     about: Optional[str] = None
+    connection_status: str = "not_connected"  # Added connection status field
     
     # Experience and Skills
     experiences: List[Dict[str, Any]] = field(default_factory=list)

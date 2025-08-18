@@ -79,7 +79,10 @@ def print_improvements():
         "✅ Better error handling and logging throughout",
         "✅ Added visibility checks for all UI elements",
         "✅ Increased wait times for modal/dropdown animations",
-        "✅ Added fallback to 'Send without note' when note button not found"
+        "✅ Added fallback to 'Send without note' when note button not found",
+        "✅ FIXED: Avoid clicking 'Contact info' by using more precise selectors",
+        "✅ FIXED: Added text-is('Connect') for exact match to avoid similar buttons",
+        "✅ FIXED: Added icon-based detection for Connect buttons"
     ]
     
     for improvement in improvements:

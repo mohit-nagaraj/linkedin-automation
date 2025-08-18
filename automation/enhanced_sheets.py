@@ -31,6 +31,7 @@ class EnhancedSheetsClient:
         "headline",
         "location",
         "profile_url",
+        "connection_status",  # Added connection status field
         
         # About and Summary
         "about",
@@ -41,6 +42,7 @@ class EnhancedSheetsClient:
         "current_position",
         "current_company",
         "total_experience_years",
+        "experience_summary",  # Added experience summary field
         "top_skills",
         "all_skills_count",
         "achievements",
@@ -260,16 +262,39 @@ class EnhancedSheetsClient:
         current_position = ""
         current_company = ""
         total_exp_years = ""
+        experience_summary = []
+        
         if profile.experiences:
             current_exp = profile.experiences[0]
             current_position = current_exp.get("title", "")
             current_company = current_exp.get("company", "")
-            # Try to parse years from duration
-            duration = current_exp.get("duration", "")
-            if "yr" in duration:
-                years = [int(s) for s in duration.split() if s.isdigit()]
-                if years:
-                    total_exp_years = str(years[0])
+            
+            # Format all experiences as single line summaries
+            for exp in profile.experiences[:5]:  # Limit to first 5 experiences
+                title = exp.get("title", "")
+                company = exp.get("company", "")
+                duration = exp.get("duration", "")
+                
+                # Create a single line summary for each experience
+                if title or company:
+                    exp_line = f"{title} at {company}" if title and company else (title or company)
+                    if duration:
+                        exp_line += f" ({duration})"
+                    experience_summary.append(exp_line)
+            
+            # Try to parse total years from all experiences
+            total_years = 0
+            for exp in profile.experiences:
+                duration = exp.get("duration", "")
+                if "yr" in duration:
+                    # Extract years from strings like "2 yrs 3 mos"
+                    import re
+                    years_match = re.search(r'(\d+)\s*yr', duration)
+                    if years_match:
+                        total_years += int(years_match.group(1))
+            
+            if total_years > 0:
+                total_exp_years = str(total_years)
         
         # Format education
         education_text = ""
@@ -284,6 +309,9 @@ class EnhancedSheetsClient:
         mutual_text = ", ".join(profile.mutual_connections[:5]) if profile.mutual_connections else ""
         interests_text = " | ".join(profile.interests[:5]) if profile.interests else ""
         
+        # Format experience summary as single line per experience
+        experience_text = " | ".join(experience_summary[:3]) if experience_summary else ""
+        
         # Build row matching COLUMNS order
         row = [
             datetime.now().strftime("%Y-%m-%d %H:%M:%S"),  # timestamp
@@ -291,6 +319,7 @@ class EnhancedSheetsClient:
             profile.headline,
             profile.location or "",
             profile.profile_url,
+            getattr(profile, 'connection_status', 'not_connected'),  # connection_status
             
             # About and Summary
             (profile.about or "")[:500],  # Truncate long about sections
@@ -301,6 +330,7 @@ class EnhancedSheetsClient:
             current_position,
             current_company,
             total_exp_years,
+            experience_text,  # experience_summary
             skills_text,
             len(profile.skills),
             achievements_text,

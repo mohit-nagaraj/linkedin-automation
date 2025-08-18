@@ -489,27 +489,47 @@ class LinkedInAutomation:
         except:
             pass
         
-        # Method 2: Try button with span containing "Connect" text
+        # Method 2: Try button with specific Connect text (more precise to avoid Contact info)
         if not connect_button:
             try:
+                # More specific selector that targets the Connect button only
                 connect_button = await self.page.wait_for_selector(
-                    'button:has(span.artdeco-button__text:text("Connect"))',
+                    'button.artdeco-button--primary:has(span.artdeco-button__text:text-is("Connect"))',
                     timeout=3000
                 )
                 if self.debug:
-                    logging.info("Found direct connect button using span text selector")
+                    logging.info("Found direct connect button using primary button selector")
             except:
                 pass
         
-        # Method 3: Try role-based selector for direct connect button
+        # Method 3: Try button with Connect icon and text
         if not connect_button:
-            connect_candidates = await self.page.get_by_role("button", name=re.compile(r"Connect", re.IGNORECASE)).all()
+            try:
+                # Look for button with connect icon
+                connect_button = await self.page.wait_for_selector(
+                    'button:has(svg[data-test-icon="connect-small"]):has-text("Connect")',
+                    timeout=3000
+                )
+                if self.debug:
+                    logging.info("Found direct connect button using icon selector")
+            except:
+                pass
+        
+        # Method 4: Try more specific role-based selector for direct connect button
+        if not connect_button:
+            connect_candidates = await self.page.locator('button:has-text("Connect")').all()
             for candidate in connect_candidates:
                 if await candidate.is_visible():
-                    connect_button = candidate
-                    if self.debug:
-                        logging.info("Found direct connect button using role selector")
-                    break
+                    # Verify it's not a contact info or other button
+                    button_text = await candidate.text_content()
+                    if button_text and button_text.strip() == "Connect":
+                        aria_label = await candidate.get_attribute("aria-label")
+                        # Make sure it's not the contact info link
+                        if not aria_label or "contact" not in aria_label.lower() or "invite" in aria_label.lower():
+                            connect_button = candidate
+                            if self.debug:
+                                logging.info("Found direct connect button using text matching")
+                            break
         
         # Method 4: Check if Connect button is hidden in "More" dropdown menu
         if not connect_button:
@@ -543,10 +563,11 @@ class LinkedInAutomation:
                 # Now look for Connect button in the dropdown
                 dropdown_connect_selectors = [
                     'button[aria-label*="Invite"][aria-label*="to connect"]',  # Your specific case
-                    'div[role="menu"] button:has-text("Connect")',
-                    'ul[role="menu"] button:has-text("Connect")',
-                    'div.artdeco-dropdown__content button:has-text("Connect")',
-                    'button:has(span:text("Connect"))'
+                    'div[role="menu"] button[aria-label*="Invite"][aria-label*="connect"]',
+                    'div.artdeco-dropdown__content button[aria-label*="Invite"]',
+                    'ul[role="menu"] button:has(svg[data-test-icon="connect-small"])',
+                    'div.artdeco-dropdown__content button:has(svg[data-test-icon="connect-small"])',
+                    'div[role="menu"] button:has-text("Connect"):not(:has-text("Send profile"))'
                 ]
                 
                 for selector in dropdown_connect_selectors:
@@ -566,11 +587,13 @@ class LinkedInAutomation:
                         ember_buttons = await self.page.locator('button[id^="ember"]').all()
                         for ember_btn in ember_buttons:
                             aria_label = await ember_btn.get_attribute("aria-label")
-                            if aria_label and "connect" in aria_label.lower():
-                                connect_button = ember_btn
-                                if self.debug:
-                                    logging.info("Found connect button using ember ID with aria-label: %s", aria_label)
-                                break
+                            if aria_label and "invite" in aria_label.lower() and "connect" in aria_label.lower():
+                                # Make sure it's not contact info or other buttons
+                                if "contact" not in aria_label.lower():
+                                    connect_button = ember_btn
+                                    if self.debug:
+                                        logging.info("Found connect button using ember ID with aria-label: %s", aria_label)
+                                    break
                     except:
                         pass
             else:
