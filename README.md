@@ -14,6 +14,7 @@ Python-based LinkedIn lead finder and connector for software dev/founder persona
 - Sends a connection request with note (with test mode available)
 - Stores leads into Google Sheets with **enhanced table structure** for better tracking
 - **Respects MAX_PROFILES limit** - stops processing after reaching your specified limit
+- **Modern UI Interface** - Easy-to-use GUI for controlling automation
 
 Note: Automating LinkedIn may violate their Terms. Use responsibly and at your own risk.
 
@@ -21,11 +22,29 @@ Note: Automating LinkedIn may violate their Terms. Use responsibly and at your o
 
 - Copy `.env.example` to `.env` and set `GSHEET_ID` from your sheet URL
 - More config: see `docs/config.md`
-- Install deps: `& ".venv\\Scripts\\pip" install -r requirements.txt`
-- Run: `python main.py`
-- Tests: `& ".venv\\Scripts\\python" -m pytest` (see `docs/testing.md`)
+- Install deps: `pip install -r requirements.txt`
+- Run: `python main.py` (launches the UI app)
+- Tests: `python -m pytest` (see `docs/testing.md`)
+
+## Usage
+
+### GUI Mode (Recommended)
+1. Run `python main.py` to launch the UI application
+2. Enter your LinkedIn credentials and search parameters
+3. Click "Start Automation" to begin the process
+4. Monitor progress in real-time through the UI
+
+### Command Line Mode
+- For direct automation without UI: `python -m automation.orchestrator`
 
 ## Key Features
+
+### 🖥️ Modern UI Interface
+- **User-Friendly GUI**: Built with CustomTkinter for a modern look and feel
+- **Real-time Progress**: Live updates on automation progress and statistics
+- **Parameter Configuration**: Easy setup of search keywords, location, and profile limits
+- **Log Viewer**: Built-in log display with filtering and export capabilities
+- **Profile Management**: View and export processed profiles
 
 ### 🔍 Smart Profile Collection
 - **Connection Status Filtering**: Automatically skips already connected profiles
@@ -56,7 +75,7 @@ Hardcoded in `automation/orchestrator.py` as `OWNER_BIO`. Edit to your preferenc
 
 ## Caution
 
-- Respect LinkedIn’s terms and local laws.
+- Respect LinkedIn's terms and local laws.
 - UI selectors on LinkedIn change often; locators may need tweaks.
 - Use responsibly and consider rate limiting for large-scale operations.
 

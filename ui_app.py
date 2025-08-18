@@ -541,17 +541,10 @@ class LinkedInAutomationUI:
             self.root.after(0, self.on_automation_complete)
     
     async def run_automation_async(self, keywords, location, max_profiles):
-        from ui_integration import LinkedInAutomationIntegration
-        
-        # Setup callbacks
-        callbacks = {
-            "progress": lambda msg, prog, stats: self.root.after(0, lambda: self.handle_progress(msg, prog, stats)),
-            "log": lambda msg, level: self.add_log_message(msg, level),
-            "profile": lambda data: self.profile_queue.put(data)
-        }
-        
-        # Create integration instance
-        integration = LinkedInAutomationIntegration(callbacks)
+        # Import the orchestrator's run function
+        from automation.orchestrator import run as run_orchestrator
+        from automation.config import Settings
+        import os
         
         # Get settings from UI
         custom_settings = {
@@ -559,18 +552,35 @@ class LinkedInAutomationUI:
             "linkedin_password": self.password_entry.get() if hasattr(self, 'password_entry') and self.password_entry.get() else None,
             "headless": self.headless_var.get() if hasattr(self, 'headless_var') else True,
             "test_mode": self.test_mode_var.get() if hasattr(self, 'test_mode_var') else False,
-            "max_profiles": max_profiles
+            "max_profiles": max_profiles,
+            "search_keywords": keywords,
+            "locations": [location] if location else []
         }
         
-        # Remove None values
-        custom_settings = {k: v for k, v in custom_settings.items() if v is not None}
+        # Set environment variables for the orchestrator
+        for key, value in custom_settings.items():
+            if value is not None:
+                if key == "linkedin_email":
+                    os.environ["LINKEDIN_EMAIL"] = str(value)
+                elif key == "linkedin_password":
+                    os.environ["LINKEDIN_PASSWORD"] = str(value)
+                elif key == "search_keywords":
+                    os.environ["SEARCH_KEYWORDS"] = str(value)
         
-        # Initialize
-        if await integration.initialize(custom_settings):
-            # Run automation
-            await integration.run_automation(keywords, [location] if location else [], max_profiles)
-        else:
-            self.add_log_message("Failed to initialize automation", "ERROR")
+        # Set other required environment variables if not already set
+        if not os.getenv("GOOGLE_API_KEY"):
+            self.add_log_message("Warning: GOOGLE_API_KEY not set", "WARNING")
+        
+        if not os.getenv("GCP_SERVICE_ACCOUNT_JSON_PATH") and not os.getenv("GCP_SERVICE_ACCOUNT_JSON"):
+            self.add_log_message("Warning: Google Sheets credentials not configured", "WARNING")
+        
+        try:
+            # Run the orchestrator
+            await run_orchestrator()
+            self.add_log_message("Automation completed successfully", "INFO")
+        except Exception as e:
+            self.add_log_message(f"Automation failed: {str(e)}", "ERROR")
+            raise
     
     def handle_progress(self, message, progress, stats):
         self.progress_label.configure(text=f"Progress: {message}")
